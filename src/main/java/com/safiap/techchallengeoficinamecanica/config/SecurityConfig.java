@@ -22,7 +22,13 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
@@ -33,6 +39,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
@@ -41,6 +48,13 @@ public class SecurityConfig {
 
     @Value("${JWT_SECRET}")
     private String jwtSecret;
+
+
+    @Value("${JWT_ISSUER:}")
+    private String jwtIssuer;
+
+    @Value("${JWT_AUDIENCE:}")
+    private String jwtAudience;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -78,8 +92,20 @@ public class SecurityConfig {
     }
     @Bean
     public JwtDecoder jwtDecoder() {
-        SecretKey secretKey = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(secretKey).build();
+        if (jwtIssuer.isBlank()) {
+            SecretKey secretKey = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
+            return NimbusJwtDecoder.withSecretKey(secretKey).build();
+        }
+
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
+                .withJwkSetUri(jwtIssuer + "/.well-known/jwks.json")
+                .build();
+
+        OAuth2TokenValidator<Jwt> audienceValidator = new JwtClaimValidator<List<String>>(
+                JwtClaimNames.AUD, aud -> aud != null && aud.contains(jwtAudience));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(jwtIssuer), audienceValidator));
+        return decoder;
     }
 
     @Bean
