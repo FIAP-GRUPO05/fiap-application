@@ -35,6 +35,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     // E-mail (notificações de mudança de status da OS) via SMTP genérico
     implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'software.amazon.awssdk:lambda:2.25.0'
     // Persistence (PostgreSQL) — added per ADR-002 implementation plan
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'org.postgresql:postgresql'
