@@ -5,13 +5,18 @@
 #
 # Uso: ./stress-flow.sh --user <email> --pass <senha> [--workers N] [--orders N] [url]
 #
-# ATENÇÃO: grava dados de verdade no banco do ambiente apontado pelo kubectl.
+# Sem url, o alvo é o API Gateway (fiap-api-gateway) descoberto via aws CLI: o login
+# passa pela lambda-token e o resto pelo authorizer JWT, como um cliente real.
+# Se o gateway não for encontrado, cai no Load Balancer do Service via kubectl.
+#
+# ATENÇÃO: grava dados de verdade no banco do ambiente apontado.
 
 set -uo pipefail
 
 NAMESPACE=${NAMESPACE:-prod}
 SERVICE=${SERVICE:-api-service}
 PORT=${PORT:-8080}
+GATEWAY_NAME=${GATEWAY_NAME:-fiap-api-gateway}
 WORKERS=${WORKERS:-4}    # fluxos completos rodando em paralelo
 ORDERS=${ORDERS:-5}      # ordens de serviço abertas por cliente criado
 LOGIN_USER=${LOGIN_USER:-}
@@ -22,7 +27,8 @@ uso() {
   echo "Uso: $0 --user <email> --pass <senha> [--workers N] [--orders N] [url]"
   echo "  --workers  fluxos paralelos (padrão: 4)"
   echo "  --orders   ordens de serviço por cliente (padrão: 5)"
-  echo "  url        opcional; sem ela o endereço vem do Service ${SERVICE} via kubectl"
+  echo "  url        opcional; sem ela usa o API Gateway ${GATEWAY_NAME} (aws CLI)"
+  echo "             e, se não achar, o Service ${SERVICE} via kubectl"
 }
 
 while [[ "${1:-}" == --* ]]; do
@@ -45,6 +51,13 @@ if [ -z "$LOGIN_USER" ] || [ -z "$LOGIN_PASS" ]; then
 fi
 
 if [ -z "$BASE" ]; then
+  BASE=$(aws apigatewayv2 get-apis \
+    --query "Items[?Name=='${GATEWAY_NAME}'].ApiEndpoint | [0]" --output text 2>/dev/null)
+  [ "$BASE" == "None" ] && BASE=""
+fi
+
+if [ -z "$BASE" ]; then
+  echo "API Gateway ${GATEWAY_NAME} não encontrado; usando o Load Balancer do Service."
   HOST=$(kubectl get svc "$SERVICE" -n "$NAMESPACE" \
     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
   [ -z "$HOST" ] && HOST=$(kubectl get svc "$SERVICE" -n "$NAMESPACE" \
@@ -119,7 +132,7 @@ worker() {
     if [ -z "$token" ]; then sleep 2; continue; fi
 
     cpf=$(gera_cpf)
-    email="loadtest-${RANDOM}${RANDOM}@exemplo.invalid"
+    email="timbeck1997@hotmail.com"
     cid=$(req cliente POST /customers/register "$token" \
       "{\"name\":\"Cliente Carga ${RANDOM}\",\"email\":\"${email}\",\"phone\":\"11999999999\",\"cnpjCpf\":\"${cpf}\"}" \
       | jq -r '.customerId // empty')
