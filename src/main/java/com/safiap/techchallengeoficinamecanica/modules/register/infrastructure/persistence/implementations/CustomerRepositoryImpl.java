@@ -23,7 +23,7 @@ public class CustomerRepositoryImpl implements CustomerRepository {
 
     @Override
     public void save(Customer customer) {
-        jpacustomerRepository.save(CustomerMapper.toJPA(customer));
+        jpacustomerRepository.saveAndFlush(CustomerMapper.toJPA(customer));
     }
 
     @Override
