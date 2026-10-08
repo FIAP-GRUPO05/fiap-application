@@ -14,7 +14,8 @@ public class CustomerMapper {
                 customer.getName(),
                 customer.getEmail().value(),
                 customer.getPhone().value(),
-                customer.getCnpjCpf().value()
+                customer.getCnpjCpf().value(),
+                customer.getStatus()
         );
     }
 
@@ -24,7 +25,8 @@ public class CustomerMapper {
                 customerEntity.getName(),
                 new Email(customerEntity.getEmail()),
                 new Phone(customerEntity.getPhone()),
-                new CnpjCpf(customerEntity.getCnpjCpf())
+                new CnpjCpf(customerEntity.getCnpjCpf()),
+                customerEntity.getStatus()
         );
     }
 }

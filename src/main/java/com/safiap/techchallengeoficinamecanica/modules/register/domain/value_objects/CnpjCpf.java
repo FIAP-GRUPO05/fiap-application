@@ -12,6 +12,9 @@ public record CnpjCpf(String value) {
         if (raw == null) {
             throw new DomainException("Invalid document: must not be null");
         }
+        if (!raw.matches("[0-9./\\-\\s]+")) {
+            throw new DomainException("Invalid document: unsupported characters");
+        }
         String digits = raw.replaceAll("\\D", "");
         if (digits.length() == 11) {
             if (!isValidCpf(digits)) {

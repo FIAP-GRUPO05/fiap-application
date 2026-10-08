@@ -7,7 +7,8 @@ import com.safiap.techchallengeoficinamecanica.modules.register.application.resp
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.CnpjCpf;
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.Email;
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.Phone;
-import com.safiap.techchallengeoficinamecanica.modules.shared.exceptions.DomainException;
+import com.safiap.techchallengeoficinamecanica.modules.shared.exceptions.ConflictException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,11 +31,15 @@ public class RegisterCustomerUseCase {
                 new CnpjCpf(request.cnpjCpf())
         );
 
-        customerRepository.findByCnpjCpf(customer.getCnpjCpf()).ifPresent(customerObj -> {
-            throw new DomainException("already exists document "+customerObj.getCnpjCpf().value());
-        });
+        if (customerRepository.findByCnpjCpf(customer.getCnpjCpf()).isPresent()) {
+            throw new ConflictException("Customer document already registered.");
+        }
 
-        customerRepository.save(customer);
+        try {
+            customerRepository.save(customer);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ConflictException("Customer document already registered.");
+        }
 
         return new RegisterCustomerResponse(customer.getName(), customer.getCustomerId());
 
