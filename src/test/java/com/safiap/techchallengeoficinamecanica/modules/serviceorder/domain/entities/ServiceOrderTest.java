@@ -1,5 +1,6 @@
 package com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.entities;
 
+import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.events.ServiceOrderStatusChangedEvent;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value_objects.Diagnosis;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value_objects.ServiceOrderPriority;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value_objects.ServiceOrderStatus;
@@ -8,6 +9,8 @@ import com.safiap.techchallengeoficinamecanica.modules.shared.exceptions.DomainE
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -119,5 +122,35 @@ class ServiceOrderTest {
         assertThat(order.getPriority()).isEqualTo(ServiceOrderPriority.URGENT);
         order.increasePriority();
         assertThat(order.getPriority()).isEqualTo(ServiceOrderPriority.URGENT);
+    }
+
+    @Test
+    @DisplayName("reports how long the order stayed in the previous status")
+    void reportsTimeInPreviousStatus() {
+        LocalDateTime enteredDiagnosisAt = LocalDateTime.now().minusMinutes(30);
+        ServiceOrder order = ServiceOrder.build(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Barulho ao frear", null, ServiceOrderStatus.IN_DIAGNOSIS, enteredDiagnosisAt.minusHours(1),
+                null, null, ServiceOrderPriority.LOW, enteredDiagnosisAt);
+
+        order.finalizeDiagnosis(new Diagnosis("Pastilhas gastas"));
+
+        ServiceOrderStatusChangedEvent event = (ServiceOrderStatusChangedEvent) order.pullDomainEvents().get(0);
+        assertThat(event.previousStatus()).isEqualTo(ServiceOrderStatus.IN_DIAGNOSIS);
+        assertThat(event.timeInPreviousStatus()).isBetween(Duration.ofMinutes(30), Duration.ofMinutes(31));
+        assertThat(order.getStatusChangedAt()).isAfter(enteredDiagnosisAt);
+    }
+
+    @Test
+    @DisplayName("leaves the time in previous status empty when the status entry time is unknown")
+    void leavesTimeInPreviousStatusEmptyWhenUnknown() {
+        ServiceOrder order = ServiceOrder.build(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "Barulho ao frear", null, ServiceOrderStatus.RECEIVED, LocalDateTime.now(),
+                null, null, ServiceOrderPriority.LOW);
+
+        order.startDiagnosis();
+
+        ServiceOrderStatusChangedEvent event = (ServiceOrderStatusChangedEvent) order.pullDomainEvents().get(0);
+        assertThat(event.timeInPreviousStatus()).isNull();
+        assertThat(order.getStatusChangedAt()).isNotNull();
     }
 }
