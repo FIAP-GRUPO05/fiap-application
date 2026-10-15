@@ -46,6 +46,10 @@ public class LambdaEmailSenderAdapter implements EmailSenderPort {
         InvokeResponse response = lambdaClient.invoke(invokeRequest);
         log.info("Status code {}",response.statusCode());
         log.info("Body {}",response.payload().asUtf8String());
+        if (response.functionError() != null || response.statusCode() >= 300) {
+            throw new IllegalStateException("lambda-email falhou (status " + response.statusCode()
+                    + ", functionError " + response.functionError() + "): " + response.payload().asUtf8String());
+        }
 
     }
 }

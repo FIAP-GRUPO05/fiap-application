@@ -36,6 +36,10 @@ dependencies {
     // E-mail (notificações de mudança de status da OS) via SMTP genérico
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'software.amazon.awssdk:lambda:2.25.0'
+    // Observabilidade: API do agente New Relic (no-op sem o agente, que o operador injeta
+    // no pod) e logs estruturados em JSON
+    implementation 'com.newrelic.agent.java:newrelic-api:8.14.0'
+    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
     // Persistence (PostgreSQL) — added per ADR-002 implementation plan
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'org.postgresql:postgresql'

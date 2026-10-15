@@ -43,10 +43,21 @@ public class JPAServiceOrderEntity {
 
     private int priority=1;
 
+    private LocalDateTime statusChangedAt;
+
     public JPAServiceOrderEntity(UUID id, UUID customerId, UUID vehicleId,
                                  String problemDescription, String diagnosis, ServiceOrderStatus status,
                                  LocalDateTime openedAt, LocalDateTime executionStartedAt,
                                  LocalDateTime concludedAt, ServiceOrderPriority priority) {
+        this(id, customerId, vehicleId, problemDescription, diagnosis, status,
+                openedAt, executionStartedAt, concludedAt, priority, null);
+    }
+
+    public JPAServiceOrderEntity(UUID id, UUID customerId, UUID vehicleId,
+                                 String problemDescription, String diagnosis, ServiceOrderStatus status,
+                                 LocalDateTime openedAt, LocalDateTime executionStartedAt,
+                                 LocalDateTime concludedAt, ServiceOrderPriority priority,
+                                 LocalDateTime statusChangedAt) {
         this.id = id;
         this.customerId = customerId;
         this.vehicleId = vehicleId;
@@ -57,5 +68,6 @@ public class JPAServiceOrderEntity {
         this.executionStartedAt = executionStartedAt;
         this.concludedAt = concludedAt;
         this.priority=priority.getValue();
+        this.statusChangedAt = statusChangedAt;
     }
 }
