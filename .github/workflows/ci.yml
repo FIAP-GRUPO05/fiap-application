@@ -2,10 +2,10 @@ name: CI
 
 on:
   pull_request:
-    branches: [develop, hom, main]
+    branches: [develop, main]
     types: [opened, reopened, synchronize]
   push:
-    branches: [develop, hom, main]
+    branches: [develop, main]
 
 permissions:
   contents: read

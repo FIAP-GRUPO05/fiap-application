@@ -2,7 +2,7 @@ package com.safiap.techchallengeoficinamecanica.modules.serviceorder.application
 
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.application.responses.AverageServiceTimeResponse;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.repositories.BudgetRepository;
-import com.safiap.techchallengeoficinamecanica.modules.serviceorder.presentation.DTO.ServiceDurationDTO;
+import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.repositories.ServiceDuration;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -23,8 +23,8 @@ public class GetAverageServiceTimeUseCase {
     public List<AverageServiceTimeResponse> execute(UUID serviceOrderId) {
         Map<UUID, List<Long>> durationsByService = budgetRepository.findServiceDurations(serviceOrderId).stream()
                 .collect(Collectors.groupingBy(
-                        ServiceDurationDTO::serviceId,
-                        Collectors.mapping(ServiceDurationDTO::durationSeconds, Collectors.toList())));
+                        ServiceDuration::serviceId,
+                        Collectors.mapping(ServiceDuration::durationSeconds, Collectors.toList())));
 
         return durationsByService.entrySet().stream()
                 .map(entry -> {

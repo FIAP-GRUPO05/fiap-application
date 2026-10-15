@@ -76,15 +76,17 @@ class ApproveBudgetUseCaseTest {
     }
 
     @Test
-    @DisplayName("approving twice is rejected: the decision is already registered")
-    void failsWhenAlreadyApproved() {
+    @DisplayName("approving twice is idempotent: same answer, no second state change")
+    void approvingTwiceIsIdempotent() {
         UUID serviceOrderId = UUID.randomUUID();
         Budget budget = finalizedBudget(serviceOrderId);
-        budget.approvedBudget();
+        budget.approve();
         when(budgetRepository.findByServiceOrderId(serviceOrderId)).thenReturn(Optional.of(budget));
 
-        assertThatThrownBy(() -> useCase.execute(new ApproveBudgetCommand(serviceOrderId)))
-                .isInstanceOf(ConflictException.class);
+        BudgetResponse response = useCase.execute(new ApproveBudgetCommand(serviceOrderId));
+
+        assertThat(response.status()).isEqualTo(BudgetStatus.APPROVED);
+        assertThat(budget.getStatus()).isEqualTo(BudgetStatus.APPROVED);
     }
 
     @Test
@@ -92,7 +94,7 @@ class ApproveBudgetUseCaseTest {
     void failsWhenAlreadyDeclined() {
         UUID serviceOrderId = UUID.randomUUID();
         Budget budget = finalizedBudget(serviceOrderId);
-        budget.declinedBudget();
+        budget.decline();
         when(budgetRepository.findByServiceOrderId(serviceOrderId)).thenReturn(Optional.of(budget));
 
         assertThatThrownBy(() -> useCase.execute(new ApproveBudgetCommand(serviceOrderId)))

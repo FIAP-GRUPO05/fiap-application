@@ -21,13 +21,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Os links de aprovar/recusar sao abertos pelo cliente direto do e-mail, sem token.
- * Estes testes travam essa liberacao — e o fato de ela nao vazar para o resto da API.
+ * O cliente decide o orcamento pelo link do e-mail, sem token. Estes testes travam o contrato
+ * desse fluxo: o GET do link e seguro, a decisao sai por POST idempotente, a decisao contraria
+ * da 409 — e nada disso vaza permissao para o resto da API.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -41,15 +43,31 @@ class BudgetDecisionPublicAccessIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
-    @DisplayName("the approval link answers with the confirmation page showing the budget")
+    @DisplayName("the link from the email only shows the budget: it never decides by itself")
+    void decisionPageIsSafe() throws Exception {
+        String serviceOrderId = givenOrderAwaitingApproval("pagina");
+
+        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/decision?decision=approve"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(containsString("Alinhamento")))
+                .andExpect(content().string(containsString("R$ 200,00")))
+                .andExpect(content().string(containsString(
+                        "action=\"/service-orders/" + serviceOrderId + "/budget/approve\"")))
+                .andExpect(content().string(containsString(
+                        "action=\"/service-orders/" + serviceOrderId + "/budget/reject\"")));
+
+        // o GET nao pode ter decidido nada — e o que impede um prefetch do webmail de aprovar
+        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget"))
+                .andExpect(jsonPath("$.status").value("FINALIZED"));
+    }
+
+    @Test
+    @DisplayName("posting the approval registers it and answers with the confirmation page")
     void approvesWithoutTokenReturningPage() throws Exception {
         String serviceOrderId = givenOrderAwaitingApproval("aprova");
 
-        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("FINALIZED"));
-
-        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/approve"))
+        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/approve"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
                 .andExpect(content().string(containsString("Orçamento aprovado")))
@@ -62,11 +80,11 @@ class BudgetDecisionPublicAccessIntegrationTest {
     }
 
     @Test
-    @DisplayName("the rejection link cancels the order and answers with its own page")
+    @DisplayName("posting the rejection cancels the order and answers with its own page")
     void rejectsWithoutTokenReturningPage() throws Exception {
         String serviceOrderId = givenOrderAwaitingApproval("recusa");
 
-        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/reject"))
+        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/reject"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
                 .andExpect(content().string(containsString("Orçamento recusado")))
@@ -78,17 +96,56 @@ class BudgetDecisionPublicAccessIntegrationTest {
     }
 
     @Test
-    @DisplayName("a decision already taken is not silently overwritten by a second click")
-    void secondClickIsRejected() throws Exception {
-        String serviceOrderId = givenOrderAwaitingApproval("duplo");
+    @DisplayName("repeating the same decision is idempotent: same 200, same state")
+    void repeatingTheSameDecisionIsIdempotent() throws Exception {
+        String approved = givenOrderAwaitingApproval("duplo-aprova");
+        for (int click = 0; click < 3; click++) {
+            mockMvc.perform(post("/service-orders/" + approved + "/budget/approve"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString("Orçamento aprovado")));
+        }
+        mockMvc.perform(get("/service-orders/" + approved + "/budget"))
+                .andExpect(jsonPath("$.status").value("APPROVED"));
 
-        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/approve"))
+        String rejected = givenOrderAwaitingApproval("duplo-recusa");
+        for (int click = 0; click < 3; click++) {
+            mockMvc.perform(post("/service-orders/" + rejected + "/budget/reject"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString("Orçamento recusado")));
+        }
+        mockMvc.perform(get("/service-orders/" + rejected + "/budget"))
+                .andExpect(jsonPath("$.status").value("DECLINED"));
+    }
+
+    @Test
+    @DisplayName("the opposite decision answers 409 with a readable page, never overwriting the first")
+    void oppositeDecisionAnswersConflictPage() throws Exception {
+        String serviceOrderId = givenOrderAwaitingApproval("oposta");
+
+        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/approve"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/approve"))
-                .andExpect(status().isConflict());
-        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/reject"))
-                .andExpect(status().isConflict());
+        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/reject"))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(containsString("já foi respondido")));
+
+        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget"))
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+    }
+
+    @Test
+    @DisplayName("after the decision the page shows the outcome instead of the buttons")
+    void decisionPageShowsTheOutcomeOnceDecided() throws Exception {
+        String serviceOrderId = givenOrderAwaitingApproval("desfecho");
+
+        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/approve"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/decision"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Orçamento aprovado")))
+                .andExpect(content().string(not(containsString("<form"))));
     }
 
     @Test
@@ -97,12 +154,13 @@ class BudgetDecisionPublicAccessIntegrationTest {
         String serviceOrderId = givenOrderAwaitingApproval("protegido");
 
         mockMvc.perform(get("/service-orders/" + serviceOrderId)).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/service-orders/all-orders")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/service-orders")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/service-orders/status/" + serviceOrderId)).andExpect(status().isUnauthorized());
         mockMvc.perform(patch("/service-orders/" + serviceOrderId + "/execute")).andExpect(status().isUnauthorized());
         mockMvc.perform(patch("/service-orders/" + serviceOrderId + "/budget/finalize")).andExpect(status().isUnauthorized());
-        // so o GET foi liberado nesses caminhos
-        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/approve")).andExpect(status().isUnauthorized());
+        // nos caminhos de decisao so o POST foi liberado
+        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/approve")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/service-orders/" + serviceOrderId + "/budget/reject")).andExpect(status().isUnauthorized());
         // a recusa pela API continua exigindo token; o link publico e o /budget/reject
         mockMvc.perform(patch("/service-orders/" + serviceOrderId + "/reject-budget")).andExpect(status().isUnauthorized());
     }

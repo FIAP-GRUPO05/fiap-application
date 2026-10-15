@@ -2,7 +2,7 @@ name: Branch Policy Enforcement
 
 on:
   pull_request:
-    branches: [develop, hom, main]
+    branches: [develop, main]
     types: [opened, reopened, synchronize]
   pull_request_review:
     types: [submitted, dismissed]
@@ -45,17 +45,9 @@ jobs:
               ].join('\n');
             }
 
-            if (target === 'hom' && source !== 'develop') {
+            if (target === 'main' && source !== 'develop') {
               routingViolation = [
-                `PRs para \`hom\` só são aceitos vindos de \`develop\`.`,
-                ``,
-                `**Branch de origem:** \`${source}\``,
-              ].join('\n');
-            }
-
-            if (target === 'main' && source !== 'hom') {
-              routingViolation = [
-                `PRs para \`main\` só são aceitos vindos de \`hom\`.`,
+                `PRs para \`main\` só são aceitos vindos de \`develop\`.`,
                 ``,
                 `**Branch de origem:** \`${source}\``,
               ].join('\n');
@@ -74,7 +66,7 @@ jobs:
                   `---`,
                   `**Fluxo obrigatório:**`,
                   `\`\`\``,
-                  `feature/* → develop → hom → main`,
+                  `feature/* → develop → main`,
                   `\`\`\``,
                 ].join('\n'),
               });

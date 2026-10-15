@@ -2,7 +2,7 @@ package com.safiap.techchallengeoficinamecanica.modules.serviceorder.application
 
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.application.responses.AverageServiceTimeResponse;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.repositories.BudgetRepository;
-import com.safiap.techchallengeoficinamecanica.modules.serviceorder.presentation.DTO.ServiceDurationDTO;
+import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.repositories.ServiceDuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -28,9 +28,9 @@ class GetAverageServiceTimeUseCaseTest {
         UUID serviceA = UUID.randomUUID();
         UUID serviceB = UUID.randomUUID();
         when(budgetRepository.findServiceDurations(serviceOrderId)).thenReturn(List.of(
-                new ServiceDurationDTO(serviceA, 60),
-                new ServiceDurationDTO(serviceA, 120),
-                new ServiceDurationDTO(serviceB, 300)
+                new ServiceDuration(serviceA, 60),
+                new ServiceDuration(serviceA, 120),
+                new ServiceDuration(serviceB, 300)
         ));
 
         Map<UUID, AverageServiceTimeResponse> byService = useCase.execute(serviceOrderId).stream()

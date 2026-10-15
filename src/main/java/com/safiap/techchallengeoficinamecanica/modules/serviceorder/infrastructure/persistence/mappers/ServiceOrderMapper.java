@@ -18,7 +18,8 @@ public class ServiceOrderMapper {
                 serviceOrder.getOpenedAt(),
                 serviceOrder.getExecutionStartedAt(),
                 serviceOrder.getConcludedAt(),
-                serviceOrder.getPriority()
+                serviceOrder.getPriority(),
+                serviceOrder.getStatusChangedAt()
         );
     }
 
@@ -33,7 +34,8 @@ public class ServiceOrderMapper {
                 entity.getOpenedAt(),
                 entity.getExecutionStartedAt(),
                 entity.getConcludedAt(),
-                ServiceOrderPriority.fromValue(entity.getPriority())
+                ServiceOrderPriority.fromValue(entity.getPriority()),
+                entity.getStatusChangedAt()
         );
     }
 }

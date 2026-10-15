@@ -44,7 +44,7 @@ public class StartServiceOrderExecutionUseCase {
         Budget budget = budgetRepository.findByServiceOrderId(serviceOrderId)
                 .orElseThrow(() -> new NotFoundException("Budget not found: " + serviceOrderId));
 
-        budget.isBudgetApproved();
+        budget.ensureApproved();
         serviceOrder.startExecution();
         consumePartStock(serviceOrderId);
         serviceOrderRepository.save(serviceOrder);

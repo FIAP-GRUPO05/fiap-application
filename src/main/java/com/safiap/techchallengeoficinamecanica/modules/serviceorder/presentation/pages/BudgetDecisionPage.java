@@ -5,10 +5,11 @@ import com.safiap.techchallengeoficinamecanica.modules.serviceorder.application.
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 
 /**
- * Página estática devolvida ao cliente quando ele decide o orçamento pelo link do e-mail.
- * É o único retorno que ele vê — o navegador abre direto do webmail, sem front-end.
+ * Páginas devolvidas ao cliente no fluxo de decisão do orçamento pelo link do e-mail.
+ * São o único retorno que ele vê — o navegador abre direto do webmail, sem front-end.
  */
 public final class BudgetDecisionPage {
 
@@ -17,18 +18,65 @@ public final class BudgetDecisionPage {
     private BudgetDecisionPage() {
     }
 
+    /**
+     * Tela que o link do e-mail abre. É só leitura: a decisão sai daqui por POST, nunca pelo
+     * GET do link — assim um pré-carregamento do webmail não aprova orçamento nenhum.
+     */
+    public static String pending(ServiceOrderResponse serviceOrder, BudgetResponse budget, String highlight) {
+        return render(serviceOrder, budget, "Orçamento aguardando sua resposta",
+                "#0b5cad", "&#128203;",
+                "Confira os itens abaixo e responda. Sua resposta só é registrada quando você "
+                        + "clica em um dos botões desta página.",
+                decisionForms(serviceOrder.serviceOrderId(), highlight));
+    }
+
     public static String approved(ServiceOrderResponse serviceOrder, BudgetResponse budget) {
         return render(serviceOrder, budget, "Orçamento aprovado",
                 "#1b7f4b", "&#10004;",
                 "Recebemos sua aprovação. Vamos iniciar o serviço no seu veículo e avisaremos "
-                        + "por e-mail a cada mudança de status.");
+                        + "por e-mail a cada mudança de status.",
+                "");
     }
 
     public static String rejected(ServiceOrderResponse serviceOrder, BudgetResponse budget) {
         return render(serviceOrder, budget, "Orçamento recusado",
                 "#b3261e", "&#10006;",
                 "Registramos sua recusa e a ordem de serviço foi cancelada. Nenhum serviço será "
-                        + "executado e nada será cobrado. Se mudar de ideia, fale com a oficina.");
+                        + "executado e nada será cobrado. Se mudar de ideia, fale com a oficina.",
+                "");
+    }
+
+    /** Decisão oposta a uma que já foi registrada: não dá para desfazer por aqui. */
+    public static String conflict(ServiceOrderResponse serviceOrder, BudgetResponse budget) {
+        return render(serviceOrder, budget, "Este orçamento já foi respondido",
+                "#8a6d00", "&#9888;",
+                "Já existe uma resposta registrada para este orçamento e ela não pode ser trocada "
+                        + "por esta página. Se precisar mudar a decisão, fale com a oficina.",
+                "");
+    }
+
+    /**
+     * Um <form> por decisão: o botão faz POST, que é o método certo para uma ação que muda
+     * estado, e o destaque só reflete o link que o cliente clicou no e-mail.
+     */
+    private static String decisionForms(UUID serviceOrderId, String highlight) {
+        boolean approveIsPrimary = !"reject".equals(highlight);
+        return """
+                        <div class="actions">
+                %s
+                %s
+                        </div>
+                """.formatted(
+                decisionForm(serviceOrderId, "approve", "Aprovar orçamento", approveIsPrimary),
+                decisionForm(serviceOrderId, "reject", "Recusar orçamento", !approveIsPrimary));
+    }
+
+    private static String decisionForm(UUID serviceOrderId, String action, String label, boolean primary) {
+        return """
+                          <form method="post" action="/service-orders/%s/budget/%s">
+                            <button type="submit" class="btn %s">%s</button>
+                          </form>""".formatted(
+                serviceOrderId, action, primary ? "primary" : "secondary", label);
     }
 
     private static String render(ServiceOrderResponse serviceOrder,
@@ -36,7 +84,8 @@ public final class BudgetDecisionPage {
                                  String title,
                                  String accent,
                                  String icon,
-                                 String message) {
+                                 String message,
+                                 String actions) {
         return """
                 <!DOCTYPE html>
                 <html lang="pt-BR">
@@ -66,6 +115,11 @@ public final class BudgetDecisionPage {
                       tfoot td { border-bottom: none; font-size: 16px; font-weight: 700; padding-top: 12px; }
                       .foot { padding: 16px 24px; background: #fafbfc; color: #59636e; font-size: 13px;
                               border-top: 1px solid #e6e8eb; }
+                      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 4px; }
+                      .btn { font: inherit; font-weight: 600; padding: 12px 20px; border-radius: 8px;
+                             border: 1px solid transparent; cursor: pointer; }
+                      .btn.primary { background: #1b7f4b; color: #fff; }
+                      .btn.secondary { background: #fff; color: #b3261e; border-color: #b3261e; }
                     </style>
                   </head>
                   <body>
@@ -97,6 +151,7 @@ public final class BudgetDecisionPage {
                             <tr><td colspan="4">Total do orçamento</td><td class="num">%s</td></tr>
                           </tfoot>
                         </table>
+                %s
                       </div>
                       <div class="foot">
                         Esta é uma confirmação automática, não é necessário respondê-la.<br>Oficina Mecânica
@@ -109,7 +164,7 @@ public final class BudgetDecisionPage {
                 shortId(serviceOrder), statusLabel(serviceOrder), openedAt(serviceOrder),
                 escape(orDash(serviceOrder.problemDescription())),
                 escape(orDash(serviceOrder.diagnosis())),
-                itemRows(budget), money(budget.totalAmount()));
+                itemRows(budget), money(budget.totalAmount()), actions);
     }
 
     private static String itemRows(BudgetResponse budget) {

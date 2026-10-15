@@ -7,8 +7,8 @@ import com.safiap.techchallengeoficinamecanica.modules.register.application.resp
 import com.safiap.techchallengeoficinamecanica.modules.register.application.responses.customer.RegisterCustomerResponse;
 import com.safiap.techchallengeoficinamecanica.modules.register.application.responses.customer.AlterCustomerResponse;
 import com.safiap.techchallengeoficinamecanica.modules.register.application.use_cases.customer.*;
-import com.safiap.techchallengeoficinamecanica.modules.register.presentation.DTO.customer.RegisterCustomerDTO;
-import com.safiap.techchallengeoficinamecanica.modules.register.presentation.DTO.customer.AlterCustomerDTO;
+import com.safiap.techchallengeoficinamecanica.modules.register.presentation.dto.customer.RegisterCustomerDTO;
+import com.safiap.techchallengeoficinamecanica.modules.register.presentation.dto.customer.AlterCustomerDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -7,8 +7,9 @@ import java.util.UUID;
 
 public record EmailMessage(String to, String subject, String body, boolean html) {
 
-    private static final String APPROVE_PATH = "%s/service-orders/%s/budget/approve";
-    private static final String REJECT_PATH = "%s/service-orders/%s/budget/reject";
+    // Os dois links levam a mesma pagina de decisao; o parametro so destaca o botao escolhido.
+    // A decisao em si sai de la por POST — link de e-mail nunca deve alterar estado sozinho.
+    private static final String DECISION_PATH = "%s/service-orders/%s/budget/decision?decision=%s";
 
     public EmailMessage {
         if (to == null || to.isBlank()) {
@@ -64,8 +65,8 @@ public record EmailMessage(String to, String subject, String body, boolean html)
                                        String shortId,
                                        String vehicleLabel,
                                        String baseUrl) {
-        String approveUrl = APPROVE_PATH.formatted(baseUrl, serviceOrderId);
-        String rejectUrl = REJECT_PATH.formatted(baseUrl, serviceOrderId);
+        String approveUrl = DECISION_PATH.formatted(baseUrl, serviceOrderId, "approve");
+        String rejectUrl = DECISION_PATH.formatted(baseUrl, serviceOrderId, "reject");
 
 
         return """

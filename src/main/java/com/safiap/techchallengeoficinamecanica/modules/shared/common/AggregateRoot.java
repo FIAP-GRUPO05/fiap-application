@@ -1,11 +1,9 @@
 package com.safiap.techchallengeoficinamecanica.modules.shared.common;
 
-
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
-public abstract class AggregateRoot  {
+public abstract class AggregateRoot {
 
     private final List<DomainEvent> domainEvents = new ArrayList<>();
 
@@ -18,10 +16,4 @@ public abstract class AggregateRoot  {
         this.domainEvents.clear();
         return events;
     }
-
-    public List<DomainEvent> peakDomainEvents(DomainEvent domainEvent) {
-        return Collections.unmodifiableList(this.domainEvents);
-    }
-
-
 }

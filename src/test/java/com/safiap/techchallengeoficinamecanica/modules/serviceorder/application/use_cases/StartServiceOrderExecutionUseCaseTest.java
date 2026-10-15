@@ -47,7 +47,7 @@ class StartServiceOrderExecutionUseCaseTest {
             budget.addService(UUID.randomUUID(), "Mao de obra", 1, new BigDecimal("100.00"));
         }
         budget.finalizeBudget();
-        budget.approvedBudget();
+        budget.approve();
         return budget;
     }
 

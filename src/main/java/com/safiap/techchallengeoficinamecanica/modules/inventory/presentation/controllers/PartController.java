@@ -12,9 +12,9 @@ import com.safiap.techchallengeoficinamecanica.modules.inventory.application.use
 import com.safiap.techchallengeoficinamecanica.modules.inventory.application.use_cases.IncreasePartStockUseCase;
 import com.safiap.techchallengeoficinamecanica.modules.inventory.application.use_cases.ListPartsUseCase;
 import com.safiap.techchallengeoficinamecanica.modules.inventory.application.use_cases.RegisterPartUseCase;
-import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.DTO.part.AlterPartDTO;
-import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.DTO.part.RegisterPartDTO;
-import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.DTO.part.StockMovementDTO;
+import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.dto.part.AlterPartDTO;
+import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.dto.part.RegisterPartDTO;
+import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.dto.part.StockMovementDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -2,7 +2,7 @@ package com.safiap.techchallengeoficinamecanica.modules.serviceorder.infrastruct
 
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.entities.Budget;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.repositories.BudgetRepository;
-import com.safiap.techchallengeoficinamecanica.modules.serviceorder.presentation.DTO.ServiceDurationDTO;
+import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.repositories.ServiceDuration;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value_objects.BudgetItemType;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.infrastructure.persistence.mappers.BudgetMapper;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.infrastructure.persistence.repositories.JPABudgetItemRepository;
@@ -48,9 +48,9 @@ public class BudgetRepositoryImpl implements BudgetRepository {
     }
 
     @Override
-    public List<ServiceDurationDTO> findServiceDurations(UUID serviceOrderId) {
+    public List<ServiceDuration> findServiceDurations(UUID serviceOrderId) {
         return jpaBudgetItemRepository.findCompletedServiceTimes(serviceOrderId, BudgetItemType.SERVICE).stream()
-                .map(row -> new ServiceDurationDTO(
+                .map(row -> new ServiceDuration(
                         row.getServiceId(),
                         Duration.between(row.getStartedAt(), row.getCompletedAt()).getSeconds()))
                 .toList();

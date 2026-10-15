@@ -94,8 +94,8 @@ class EmailMessageTest {
 
         assertThat(message.html()).isTrue();
         assertThat(message.body())
-                .contains(BASE_URL + "/service-orders/" + SERVICE_ORDER_ID + "/budget/approve")
-                .contains(BASE_URL + "/service-orders/" + SERVICE_ORDER_ID + "/budget/reject");
+                .contains(BASE_URL + "/service-orders/" + SERVICE_ORDER_ID + "/budget/decision?decision=approve")
+                .contains(BASE_URL + "/service-orders/" + SERVICE_ORDER_ID + "/budget/decision?decision=reject");
     }
 
     @Test
@@ -148,17 +148,21 @@ class EmailMessageTest {
     }
 
     @Test
-    @DisplayName("each action link points at its own endpoint: Aceitar approves, Rejeitar rejects")
+    @DisplayName("each action link carries its own decision, and neither of them decides by itself")
     void actionLinksPointToTheRightEndpoint() {
         EmailMessage message = EmailMessage.serviceOrderStatusChanged(
                 RECIPIENT, SERVICE_ORDER_ID, "Honda Civic (ABC1D23)",
                 ServiceOrderStatus.AWAITING_APPROVAL, BASE_URL);
 
-        String base = BASE_URL + "/service-orders/" + SERVICE_ORDER_ID;
+        String decision = BASE_URL + "/service-orders/" + SERVICE_ORDER_ID + "/budget/decision";
         // Trava o alinhamento dos %s: ja houve um bug em que "Rejeitar" apontava para o approve.
         assertThat(message.body())
-                .contains("<a href=\"" + base + "/budget/approve\">Aceitar</a>")
-                .contains("<a href=\"" + base + "/budget/reject\">Rejeitar</a>");
+                .contains("<a href=\"" + decision + "?decision=approve\">Aceitar</a>")
+                .contains("<a href=\"" + decision + "?decision=reject\">Rejeitar</a>");
+        // O link nunca pode apontar para o endpoint que muda estado: la so se chega por POST.
+        assertThat(message.body())
+                .doesNotContain("href=\"" + BASE_URL + "/service-orders/" + SERVICE_ORDER_ID + "/budget/approve\"")
+                .doesNotContain("href=\"" + BASE_URL + "/service-orders/" + SERVICE_ORDER_ID + "/budget/reject\"");
     }
 
 }

@@ -8,6 +8,7 @@ import com.safiap.techchallengeoficinamecanica.modules.shared.common.AggregateRo
 import com.safiap.techchallengeoficinamecanica.modules.shared.exceptions.ConflictException;
 import com.safiap.techchallengeoficinamecanica.modules.shared.exceptions.DomainException;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -23,11 +24,14 @@ public class ServiceOrder extends AggregateRoot {
     private LocalDateTime executionStartedAt;
     private LocalDateTime concludedAt;
     private ServiceOrderPriority priority;
+    // Instante em que a OS entrou no status atual: base do tempo por status
+    private LocalDateTime statusChangedAt;
 
     private ServiceOrder(UUID serviceOrderId, UUID customerId, UUID vehicleId,
                          String problemDescription, Diagnosis diagnosis, ServiceOrderStatus status,
                          LocalDateTime openedAt, LocalDateTime executionStartedAt,
-                         LocalDateTime concludedAt, ServiceOrderPriority priority) {
+                         LocalDateTime concludedAt, ServiceOrderPriority priority,
+                         LocalDateTime statusChangedAt) {
         this.serviceOrderId = serviceOrderId;
         this.customerId = customerId;
         this.vehicleId = vehicleId;
@@ -38,12 +42,14 @@ public class ServiceOrder extends AggregateRoot {
         this.executionStartedAt = executionStartedAt;
         this.concludedAt = concludedAt;
         this.priority = priority;
+        this.statusChangedAt = statusChangedAt;
     }
 
     public static ServiceOrder open(UUID customerId, UUID vehicleId, String problemDescription) {
+        LocalDateTime now = LocalDateTime.now();
         ServiceOrder serviceOrder = new ServiceOrder(UUID.randomUUID(), customerId, vehicleId,
-                problemDescription, null, ServiceOrderStatus.RECEIVED, LocalDateTime.now(), null, null,
-                ServiceOrderPriority.LOW);
+                problemDescription, null, ServiceOrderStatus.RECEIVED, now, null, null,
+                ServiceOrderPriority.LOW, now);
         serviceOrder.registerDomainEvent(ServiceOrderStatusChangedEvent.of(
                 serviceOrder.serviceOrderId, serviceOrder.customerId, serviceOrder.vehicleId,
                 null, ServiceOrderStatus.RECEIVED));
@@ -54,8 +60,17 @@ public class ServiceOrder extends AggregateRoot {
                                      String problemDescription, Diagnosis diagnosis, ServiceOrderStatus status,
                                      LocalDateTime openedAt, LocalDateTime executionStartedAt,
                                      LocalDateTime concludedAt, ServiceOrderPriority priority) {
-        return new ServiceOrder(serviceOrderId, customerId, vehicleId,
-                problemDescription, diagnosis, status, openedAt, executionStartedAt, concludedAt, priority);
+        return build(serviceOrderId, customerId, vehicleId, problemDescription, diagnosis, status,
+                openedAt, executionStartedAt, concludedAt, priority, null);
+    }
+
+    public static ServiceOrder build(UUID serviceOrderId, UUID customerId, UUID vehicleId,
+                                     String problemDescription, Diagnosis diagnosis, ServiceOrderStatus status,
+                                     LocalDateTime openedAt, LocalDateTime executionStartedAt,
+                                     LocalDateTime concludedAt, ServiceOrderPriority priority,
+                                     LocalDateTime statusChangedAt) {
+        return new ServiceOrder(serviceOrderId, customerId, vehicleId, problemDescription, diagnosis, status,
+                openedAt, executionStartedAt, concludedAt, priority, statusChangedAt);
     }
 
     public void increasePriority() {
@@ -89,6 +104,8 @@ public class ServiceOrder extends AggregateRoot {
     }
 
     public void rejectBudget() {
+        if (this.status == ServiceOrderStatus.CANCELED)
+            return;
         if (this.status != ServiceOrderStatus.AWAITING_APPROVAL)
             throw new ConflictException("Service order must be in AWAITING_APPROVAL status to reject budget");
         changeStatus(ServiceOrderStatus.CANCELED);
@@ -109,9 +126,12 @@ public class ServiceOrder extends AggregateRoot {
 
     private void changeStatus(ServiceOrderStatus newStatus) {
         ServiceOrderStatus previousStatus = this.status;
+        LocalDateTime now = LocalDateTime.now();
+        Duration timeInPreviousStatus = statusChangedAt != null ? Duration.between(statusChangedAt, now) : null;
         this.status = newStatus;
+        this.statusChangedAt = now;
         registerDomainEvent(ServiceOrderStatusChangedEvent.of(
-                serviceOrderId, customerId, vehicleId, previousStatus, newStatus));
+                serviceOrderId, customerId, vehicleId, previousStatus, newStatus, timeInPreviousStatus));
     }
 
     public UUID getServiceOrderId() { return serviceOrderId; }
@@ -124,4 +144,5 @@ public class ServiceOrder extends AggregateRoot {
     public LocalDateTime getExecutionStartedAt() { return executionStartedAt; }
     public LocalDateTime getConcludedAt() { return concludedAt; }
     public ServiceOrderPriority getPriority() { return priority;}
+    public LocalDateTime getStatusChangedAt() { return statusChangedAt; }
 }

@@ -2,5 +2,5 @@ package com.safiap.techchallengeoficinamecanica.modules.serviceorder.application
 
 import java.util.UUID;
 
-public record ApproveBudgetCommand(UUID ServiceOrderId) {
+public record ApproveBudgetCommand(UUID serviceOrderId) {
 }

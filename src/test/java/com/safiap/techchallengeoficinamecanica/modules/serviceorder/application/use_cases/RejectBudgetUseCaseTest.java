@@ -8,15 +8,18 @@ import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.repos
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value_objects.BudgetStatus;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value_objects.ServiceOrderPriority;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value_objects.ServiceOrderStatus;
+import com.safiap.techchallengeoficinamecanica.modules.shared.common.DomainEvent;
 import com.safiap.techchallengeoficinamecanica.modules.shared.domain.events.DomainEventPublisher;
 import com.safiap.techchallengeoficinamecanica.modules.shared.exceptions.ConflictException;
 import com.safiap.techchallengeoficinamecanica.modules.shared.exceptions.NotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -121,5 +124,26 @@ class RejectBudgetUseCaseTest {
         when(serviceOrderRepository.findById(serviceOrderId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(serviceOrderId)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("rejecting twice is idempotent: the order stays canceled and no new event is published")
+    void rejectingTwiceIsIdempotent() {
+        UUID serviceOrderId = UUID.randomUUID();
+        ServiceOrder serviceOrder = order(serviceOrderId, UUID.randomUUID(), ServiceOrderStatus.AWAITING_APPROVAL);
+        when(serviceOrderRepository.findById(serviceOrderId)).thenReturn(Optional.of(serviceOrder));
+        Budget budget = givenBudget(serviceOrderId);
+
+        useCase.execute(serviceOrderId);
+        ServiceOrderResponse response = useCase.execute(serviceOrderId);
+
+        assertThat(response.status()).isEqualTo(ServiceOrderStatus.CANCELED);
+        assertThat(budget.getStatus()).isEqualTo(BudgetStatus.DECLINED);
+        // o segundo clique nao pode disparar um novo e-mail de cancelamento
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<DomainEvent>> published = ArgumentCaptor.forClass(List.class);
+        verify(domainEventPublisher, times(2)).publishAll(published.capture());
+        assertThat(published.getAllValues().get(0)).hasSize(1);
+        assertThat(published.getAllValues().get(1)).isEmpty();
     }
 }

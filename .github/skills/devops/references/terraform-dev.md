@@ -50,7 +50,7 @@ terraform destroy
 | `kubernetes_secret.api` | Datasource, `JWT_SECRET` e `JWT_EXPIRATION` |
 | `kubernetes_deployment.api` | Imagem da API com probes em `/actuator/health` |
 | `kubernetes_service.api` | NodePort `30080` |
-| `kubernetes_horizontal_pod_autoscaler_v2.api` | 1 a 5 réplicas, alvo de 70% de CPU |
+| `kubernetes_horizontal_pod_autoscaler_v2.api` | 1 a 5 réplicas, alvo de 70% de CPU e 80% de memória |
 
 ## Diferenças em relação a `k8s/`
 

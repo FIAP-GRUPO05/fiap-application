@@ -10,8 +10,8 @@ import com.safiap.techchallengeoficinamecanica.modules.inventory.application.use
 import com.safiap.techchallengeoficinamecanica.modules.inventory.application.use_cases.GetServiceByIdUseCase;
 import com.safiap.techchallengeoficinamecanica.modules.inventory.application.use_cases.ListServicesUseCase;
 import com.safiap.techchallengeoficinamecanica.modules.inventory.application.use_cases.RegisterServiceUseCase;
-import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.DTO.service.AlterServiceDTO;
-import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.DTO.service.RegisterServiceDTO;
+import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.dto.service.AlterServiceDTO;
+import com.safiap.techchallengeoficinamecanica.modules.inventory.presentation.dto.service.RegisterServiceDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

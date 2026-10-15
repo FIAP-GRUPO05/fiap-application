@@ -78,19 +78,39 @@ public class Budget {
         this.status = BudgetStatus.FINALIZED;
     }
 
-    public void declinedBudget() {
-        if (this.status != BudgetStatus.FINALIZED)
-            throw new ConflictException("Budget must be a finalized");
-        this.status = BudgetStatus.DECLINED;
-    }
 
-    public void approvedBudget() {
-        if (this.status != BudgetStatus.FINALIZED)
-            throw new ConflictException("Budget must be a finalized");
+    public void approve() {
+        if (this.status == BudgetStatus.APPROVED)
+            return;
+        if (this.status == BudgetStatus.DECLINED)
+            throw new ConflictException("Budget was already declined by the customer");
+        requireFinalized();
         this.status = BudgetStatus.APPROVED;
     }
 
-    public void isBudgetApproved () {
+
+    public void decline() {
+        if (this.status == BudgetStatus.DECLINED)
+            return;
+        if (this.status == BudgetStatus.APPROVED)
+            throw new ConflictException("Budget was already approved by the customer");
+        requireFinalized();
+        this.status = BudgetStatus.DECLINED;
+    }
+
+
+    private void requireFinalized() {
+        if (this.status != BudgetStatus.FINALIZED)
+            throw new ConflictException("Budget must be finalized before the customer decides on it");
+    }
+
+
+    public boolean isDecided() {
+        return this.status == BudgetStatus.APPROVED || this.status == BudgetStatus.DECLINED;
+    }
+
+    /** Guarda: interrompe a operacao se o cliente ainda nao aprovou o orcamento. */
+    public void ensureApproved() {
         if (this.status != BudgetStatus.APPROVED)
             throw new ConflictException("Budget must be approved by customer");
     }

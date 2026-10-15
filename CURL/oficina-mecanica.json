@@ -606,6 +606,24 @@
               "response": []
             },
             {
+              "name": "Listar OS (fila de trabalho)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders"
+                  ]
+                },
+                "description": "Fila de trabalho da oficina. Aplica a exclusão lógica — OS FINALIZED e DELIVERED ficam fora da listagem, sem serem apagadas — e ordena por status (Em execução > Aguardando aprovação > Diagnóstico > Recebida) e, dentro de cada status, da mais antiga para a mais nova.\n\nPara ver as encerradas, use 'Listar OS por Status' com status=DELIVERED, ou consulte a OS pelo id."
+              },
+              "response": []
+            },
+            {
               "name": "Listar OS por Status",
               "request": {
                 "method": "GET",
@@ -993,6 +1011,76 @@
                   ]
                 },
                 "description": "Conclui a execução de um item de serviço (grava a data de fim, usada nas métricas). Requer a OS em IN_EXECUTION.\n\nCopie o `budgetItemId` do item do tipo SERVICE retornado em 'Consultar Orçamento' para a variável `itemId`."
+              },
+              "response": []
+            },
+            {
+              "name": "6-Página de Decisão do Orçamento (público)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget/decision?decision=approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "budget",
+                    "decision"
+                  ],
+                  "query": [
+                    {
+                      "key": "decision",
+                      "value": "approve",
+                      "description": "approve ou reject — apenas destaca o botão"
+                    }
+                  ]
+                },
+                "description": "Página que o link do e-mail abre. Endpoint público (sem token) e SEGURO: apenas exibe o orçamento com os botões de aprovar e recusar, sem alterar nada. O parâmetro `decision` (approve|reject) só destaca o botão que o cliente clicou."
+              },
+              "response": []
+            },
+            {
+              "name": "7-Aprovar Orçamento (público, idempotente)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget/approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "budget",
+                    "approve"
+                  ]
+                },
+                "description": "Registra a aprovação do cliente. Público (sem token) e IDEMPOTENTE: repetir a chamada devolve 200 com a mesma página e não muda o estado. A decisão contrária a uma já registrada responde 409 e preserva a primeira. Exige o orçamento FINALIZED."
+              },
+              "response": []
+            },
+            {
+              "name": "8-Recusar Orçamento (público, idempotente)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget/reject",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "budget",
+                    "reject"
+                  ]
+                },
+                "description": "Registra a recusa do cliente e cancela a OS. Público (sem token) e IDEMPOTENTE nos mesmos termos do approve: repetir não gera novo evento nem novo e-mail; a decisão contrária responde 409."
               },
               "response": []
             }

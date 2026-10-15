@@ -1,6 +1,7 @@
 package com.safiap.techchallengeoficinamecanica.modules.register.domain.entities;
 
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.CnpjCpf;
+import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.CustomerStatus;
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.Email;
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.Phone;
 import com.safiap.techchallengeoficinamecanica.modules.shared.common.AggregateRoot;
@@ -15,6 +16,7 @@ public class Customer extends AggregateRoot {
     private Email email;
     private Phone phone;
     private CnpjCpf cnpjCpf;
+    private CustomerStatus status;
 
     private Customer() {}
 
@@ -22,13 +24,15 @@ public class Customer extends AggregateRoot {
                      String name,
                      Email email,
                      Phone phone,
-                     CnpjCpf cnpjCpf) {
+                     CnpjCpf cnpjCpf,
+                     CustomerStatus status) {
 
         this.customerId = customerId;
         this.name = name;
         this.email = email;
         this.phone = phone;
         this.cnpjCpf = cnpjCpf;
+        this.status = status;
     }
 
 
@@ -50,6 +54,15 @@ public class Customer extends AggregateRoot {
 
     public CnpjCpf getCnpjCpf() {
         return cnpjCpf;
+    }
+
+    public CustomerStatus getStatus() {
+        return status;
+    }
+
+    public void changeStatus(CustomerStatus status) {
+        DomainException.requireNonNull(status, " status is null");
+        this.status = status;
     }
 
     private void changeName (String newName) {
@@ -75,7 +88,8 @@ public class Customer extends AggregateRoot {
                 name,
                 email,
                 phone,
-                cnpjCpf
+                cnpjCpf,
+                CustomerStatus.ACTIVE
         );
     }
 
@@ -84,19 +98,30 @@ public class Customer extends AggregateRoot {
                                   Email email,
                                   Phone phone,
                                   CnpjCpf cnpjCpf) {
+        return buildCustomer(customerId, name, email, phone, cnpjCpf, CustomerStatus.ACTIVE);
+    }
+
+    public static Customer buildCustomer(UUID customerId,
+                                         String name,
+                                         Email email,
+                                         Phone phone,
+                                         CnpjCpf cnpjCpf,
+                                         CustomerStatus status) {
 
         DomainException.requireNonNull(customerId, " customerId is null");
         DomainException.requireNotBlank(name, " name is blank");
         DomainException.requireNonNull(email, " email is null");
         DomainException.requireNonNull(phone, " phone is null");
         DomainException.requireNonNull(cnpjCpf, " cnpjCpf is null");
+        DomainException.requireNonNull(status, " status is null");
 
         return new Customer(
                 customerId,
                 name,
                 email,
                 phone,
-                cnpjCpf
+                cnpjCpf,
+                status
         );
     }
 

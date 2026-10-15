@@ -56,7 +56,7 @@ public class RejectBudgetUseCase {
             throw new AccessDeniedException("Service order does not belong to the authenticated customer");
         }
 
-        budget.declinedBudget();
+        budget.decline();
         budgetRepository.save(budget);
         // O orçamento recusado permanece DECLINED: a OS é encerrada e o histórico do que foi
         // orçado precisa continuar íntegro para consulta.

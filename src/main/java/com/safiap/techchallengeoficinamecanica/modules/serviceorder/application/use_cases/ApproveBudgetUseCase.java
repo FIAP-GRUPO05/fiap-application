@@ -19,10 +19,10 @@ public class ApproveBudgetUseCase {
 
     @Transactional
     public BudgetResponse execute(ApproveBudgetCommand command) {
-        Budget budget = budgetRepository.findByServiceOrderId(command.ServiceOrderId())
-                .orElseThrow(() -> new NotFoundException("Budget not found, service order : " + command.ServiceOrderId()));
+        Budget budget = budgetRepository.findByServiceOrderId(command.serviceOrderId())
+                .orElseThrow(() -> new NotFoundException("Budget not found, service order : " + command.serviceOrderId()));
 
-        budget.approvedBudget();
+        budget.approve();
         budgetRepository.save(budget);
 
         return BudgetResponse.from(budget);

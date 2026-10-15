@@ -1,8 +1,11 @@
 package com.safiap.techchallengeoficinamecanica.modules.register.domain.entities;
 
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.CnpjCpf;
+import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.CustomerStatus;
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.Email;
 import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.Phone;
+import com.safiap.techchallengeoficinamecanica.modules.register.infrastructure.persistence.entities.JPACustomerEntity;
+import com.safiap.techchallengeoficinamecanica.modules.register.infrastructure.persistence.mappers.CustomerMapper;
 import com.safiap.techchallengeoficinamecanica.modules.shared.exceptions.DomainException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,7 @@ class CustomerTest {
         assertThat(customer.getEmail()).isEqualTo(email);
         assertThat(customer.getPhone()).isEqualTo(phone);
         assertThat(customer.getCnpjCpf()).isEqualTo(cnpjCpf);
+        assertThat(customer.getStatus()).isEqualTo(CustomerStatus.ACTIVE);
     }
 
     @Test
@@ -67,6 +71,47 @@ class CustomerTest {
 
         assertThat(customer.getCustomerId()).isEqualTo(customerId);
         assertThat(customer.getName()).isEqualTo("Maria");
+    }
+
+    @Test
+    @DisplayName("rebuilds a customer preserving its status")
+    void buildsCustomerKeepingProvidedStatus() {
+        Customer customer = Customer.buildCustomer(
+                UUID.randomUUID(), "Maria", email, phone, cnpjCpf, CustomerStatus.INACTIVE);
+
+        assertThat(customer.getStatus()).isEqualTo(CustomerStatus.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("changes customer status")
+    void changesStatus() {
+        Customer customer = Customer.createCustomer("João", email, phone, cnpjCpf);
+
+        customer.changeStatus(CustomerStatus.INACTIVE);
+
+        assertThat(customer.getStatus()).isEqualTo(CustomerStatus.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("rejects a null customer status")
+    void rejectsNullStatus() {
+        Customer customer = Customer.createCustomer("João", email, phone, cnpjCpf);
+
+        assertThatThrownBy(() -> customer.changeStatus(null))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    @DisplayName("persists and restores customer status through its mapper")
+    void mapsCustomerStatus() {
+        Customer customer = Customer.buildCustomer(
+                UUID.randomUUID(), "Maria", email, phone, cnpjCpf, CustomerStatus.INACTIVE);
+
+        JPACustomerEntity persistedCustomer = CustomerMapper.toJPA(customer);
+        Customer restoredCustomer = CustomerMapper.toEntity(persistedCustomer);
+
+        assertThat(persistedCustomer.getStatus()).isEqualTo(CustomerStatus.INACTIVE);
+        assertThat(restoredCustomer.getStatus()).isEqualTo(CustomerStatus.INACTIVE);
     }
 
     @Test

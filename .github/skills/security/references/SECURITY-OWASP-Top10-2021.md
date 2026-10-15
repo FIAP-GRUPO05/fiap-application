@@ -58,7 +58,7 @@
 - **Ausência de checagem de propriedade** (object-level): nenhum use case valida "este recurso pertence ao solicitante". Aceitável hoje pela separação de papéis, mas frágil — o primeiro endpoint por-id exposto a `CUSTOMER` vazaria dados de terceiros.
 
 - **Evidência:** `MetricsController.java:14-28`; `GetCustomerByIdUseCase`, `GetVehicleByIdUseCase`, `GetServiceOrderByIdUseCase`, `OpenServiceOrderUseCase` (sem verificação de dono).
-- **Correção:** anotar `MetricsController` com `@PreAuthorize`; ao expor recursos a clientes, comparar o `customerId` do JWT com o dono do recurso — padrão já usado corretamente em `/my-orders` (`ServiceOrderController.java:134`, `@PreAuthorize("hasRole('CUSTOMER')")` + claim `customerId`).
+- **Correção:** anotar `MetricsController` com `@PreAuthorize`; ao expor recursos a clientes, comparar o `customerId` do JWT com o dono do recurso — padrão já usado corretamente em `/my-orders` (`ServiceOrderController.java:128`, `@PreAuthorize("hasRole('CUSTOMER')")` + claim `customerId`).
 
 ---
 
@@ -148,7 +148,7 @@ Nenhuma chamada HTTP de saída (`RestTemplate`, `WebClient`, `HttpClient`, `URL.
 | Login/registro sem rate limit | `config/SecurityConfig.java:49-51` |
 | Method security habilitado (PreAuthorize efetivo) | `config/SecurityConfig.java:37` |
 | `MetricsController` sem `@PreAuthorize` | `modules/serviceorder/presentation/controllers/MetricsController.java:16` |
-| Autorização escopada correta (referência) | `modules/serviceorder/presentation/controllers/ServiceOrderController.java:134` |
+| Autorização escopada correta (referência) | `modules/serviceorder/presentation/controllers/ServiceOrderController.java:128` |
 | Senha sem validação | `modules/auth/presentation/dto/AddUserDto.java`, `RegisterAccountDto.java` |
 | Fallback de `JWT_SECRET`/senha DB | `docker-compose.yaml:42,44` |
 | JWT sem validação de tamanho do secret | `config/SecurityConfig.java:71` |

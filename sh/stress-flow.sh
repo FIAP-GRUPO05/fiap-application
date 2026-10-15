@@ -2,27 +2,42 @@
 #
 # Teste de carga com o fluxo real de negócio, em vez de martelar um endpoint só:
 #   login -> cadastra cliente -> cadastra veículo -> abre N ordens de serviço
+# e cada OS avança pelo fluxo completo, com uma espera aleatória entre as etapas:
+#   RECEIVED -> IN_DIAGNOSIS -> AWAITING_APPROVAL -> IN_EXECUTION -> FINALIZED -> DELIVERED
+# Uma parte das OSs tem o orçamento recusado (CANCELED). As esperas alimentam o tempo
+# médio por status no New Relic.
 #
-# Uso: ./stress-flow.sh --user <email> --pass <senha> [--workers N] [--orders N] [url]
+# Uso: ./stress-flow.sh --user <email> --pass <senha> [--workers N] [--orders N]
+#                       [--delay MIN-MAX] [--reject PCT] [url]
 #
-# ATENÇÃO: grava dados de verdade no banco do ambiente apontado pelo kubectl.
+# Sem url, o alvo é o API Gateway (fiap-api-gateway) descoberto via aws CLI: o login
+# passa pela lambda-token e o resto pelo authorizer JWT, como um cliente real.
+# Se o gateway não for encontrado, cai no Load Balancer do Service via kubectl.
+#
+# ATENÇÃO: grava dados de verdade no banco do ambiente apontado.
 
 set -uo pipefail
 
 NAMESPACE=${NAMESPACE:-prod}
 SERVICE=${SERVICE:-api-service}
 PORT=${PORT:-8080}
+GATEWAY_NAME=${GATEWAY_NAME:-fiap-api-gateway}
 WORKERS=${WORKERS:-4}    # fluxos completos rodando em paralelo
 ORDERS=${ORDERS:-5}      # ordens de serviço abertas por cliente criado
+DELAY=${DELAY:-5-20}     # espera, em segundos, entre uma etapa da OS e a próxima
+REJECT=${REJECT:-10}     # % de OSs com o orçamento recusado
 LOGIN_USER=${LOGIN_USER:-}
 LOGIN_PASS=${LOGIN_PASS:-}
 BASE=${API_URL:-}
 
 uso() {
-  echo "Uso: $0 --user <email> --pass <senha> [--workers N] [--orders N] [url]"
+  echo "Uso: $0 --user <email> --pass <senha> [--workers N] [--orders N] [--delay MIN-MAX] [--reject PCT] [url]"
   echo "  --workers  fluxos paralelos (padrão: 4)"
   echo "  --orders   ordens de serviço por cliente (padrão: 5)"
-  echo "  url        opcional; sem ela o endereço vem do Service ${SERVICE} via kubectl"
+  echo "  --delay    segundos entre as etapas de cada OS (padrão: 5-20)"
+  echo "  --reject   % de OSs com orçamento recusado (padrão: 10)"
+  echo "  url        opcional; sem ela usa o API Gateway ${GATEWAY_NAME} (aws CLI)"
+  echo "             e, se não achar, o Service ${SERVICE} via kubectl"
 }
 
 while [[ "${1:-}" == --* ]]; do
@@ -31,6 +46,8 @@ while [[ "${1:-}" == --* ]]; do
     --pass)    shift; LOGIN_PASS=${1:-} ;;
     --workers) shift; WORKERS=${1:-4} ;;
     --orders)  shift; ORDERS=${1:-5} ;;
+    --delay)   shift; DELAY=${1:-5-20} ;;
+    --reject)  shift; REJECT=${1:-10} ;;
     -h|--help) uso; exit 0 ;;
     *) echo "Opção desconhecida: $1"; uso; exit 1 ;;
   esac
@@ -44,7 +61,21 @@ if [ -z "$LOGIN_USER" ] || [ -z "$LOGIN_PASS" ]; then
   exit 1
 fi
 
+if [[ ! "$DELAY" =~ ^[0-9]+-[0-9]+$ ]] || [ "${DELAY%-*}" -gt "${DELAY#*-}" ]; then
+  echo "--delay deve ser MIN-MAX em segundos, com MIN <= MAX (ex.: 5-20)."
+  exit 1
+fi
+DELAY_MIN=${DELAY%-*}
+DELAY_MAX=${DELAY#*-}
+
 if [ -z "$BASE" ]; then
+  BASE=$(aws apigatewayv2 get-apis \
+    --query "Items[?Name=='${GATEWAY_NAME}'].ApiEndpoint | [0]" --output text 2>/dev/null)
+  [ "$BASE" == "None" ] && BASE=""
+fi
+
+if [ -z "$BASE" ]; then
+  echo "API Gateway ${GATEWAY_NAME} não encontrado; usando o Load Balancer do Service."
   HOST=$(kubectl get svc "$SERVICE" -n "$NAMESPACE" \
     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
   [ -z "$HOST" ] && HOST=$(kubectl get svc "$SERVICE" -n "$NAMESPACE" \
@@ -62,15 +93,22 @@ PIDS=()
 resumo() {
   echo ""
   echo "===================== RESUMO ====================="
-  printf "%-10s %-6s %s\n" "ETAPA" "HTTP" "QTD"
-  awk '{c[$1" "$2]++} END {for (k in c) {split(k,p," "); printf "%-10s %-6s %s\n", p[1], p[2], c[k]}}' \
+  printf "%-13s %-6s %s\n" "ETAPA" "HTTP" "QTD"
+  awk '{c[$1" "$2]++} END {for (k in c) {split(k,p," "); printf "%-13s %-6s %s\n", p[1], p[2], c[k]}}' \
     "$STATS" | sort
   echo "=================================================="
 }
 
+# Os workers disparam um subprocesso por OS: encerra a árvore inteira
+mata_arvore() {
+  local filho
+  for filho in $(pgrep -P "$1" 2>/dev/null); do mata_arvore "$filho"; done
+  kill "$1" 2>/dev/null
+}
+
 encerra() {
   trap - EXIT INT TERM
-  for pid in "${PIDS[@]:-}"; do kill "$pid" 2>/dev/null; done
+  for pid in "${PIDS[@]:-}"; do [ -n "$pid" ] && mata_arvore "$pid"; done
   wait 2>/dev/null
   resumo
   rm -f "$STATS"
@@ -111,15 +149,57 @@ req() {
   printf '%s' "${saida%$'\n'*}"
 }
 
+espera() {
+  sleep $((DELAY_MIN + RANDOM % (DELAY_MAX - DELAY_MIN + 1)))
+}
+
+# Leva uma OS de RECEIVED até DELIVERED (ou CANCELED), uma etapa por vez.
+# Se uma etapa falhar, a OS fica parada no status em que estava.
+ciclo_os() {
+  local token=$1 os=$2 item
+  local p="/service-orders/${os}"
+
+  espera
+  req diagnostico PATCH "$p/start-diagnosis" "$token" > /dev/null
+
+  # O orçamento precisa ter itens antes de fechar o diagnóstico (o finalize-diagnosis
+  # ignora os itens do corpo); fechar o diagnóstico finaliza o orçamento -> AWAITING_APPROVAL
+  espera
+  req orcamento POST "$p/budget/items" "$token" \
+    "{\"items\":[{\"type\":\"SERVICE\",\"itemId\":\"${SERVICE_ID}\",\"description\":\"Revisão (carga)\",\"quantity\":1}]}" \
+    > /dev/null
+  req diagnostico_fim PATCH "$p/finalize-diagnosis" "$token" \
+    '{"diagnosis":"Desgaste identificado (carga)"}' > /dev/null
+
+  espera
+  if [ $((RANDOM % 100)) -lt "$REJECT" ]; then
+    req recusa PATCH "$p/reject-budget" "$token" > /dev/null
+    return
+  fi
+  req aprovacao POST "$p/budget/approve" "" > /dev/null
+  req execucao PATCH "$p/execute" "$token" > /dev/null
+
+  # A OS só finaliza com todos os itens de serviço concluídos
+  espera
+  for item in $(req orcamento_get GET "$p/budget" "$token" \
+      | jq -r '.items[]? | select(.type == "SERVICE") | .budgetItemId'); do
+    req item PATCH "$p/budget/items/${item}/complete" "$token" > /dev/null
+  done
+  req finalizacao PATCH "$p/finalize" "$token" > /dev/null
+
+  espera
+  req entrega PATCH "$p/deliver" "$token" > /dev/null
+}
+
 worker() {
-  local token cid vid cpf email placa i
+  local token cid vid cpf email placa i os
   while true; do
     token=$(req login POST /auth/login "" \
       "{\"email\":\"${LOGIN_USER}\",\"password\":\"${LOGIN_PASS}\"}" | jq -r '.accessToken // empty')
     if [ -z "$token" ]; then sleep 2; continue; fi
 
     cpf=$(gera_cpf)
-    email="loadtest-${RANDOM}${RANDOM}@exemplo.invalid"
+    email="x-timbeck1997@hotmail.com"
     cid=$(req cliente POST /customers/register "$token" \
       "{\"name\":\"Cliente Carga ${RANDOM}\",\"email\":\"${email}\",\"phone\":\"11999999999\",\"cnpjCpf\":\"${cpf}\"}" \
       | jq -r '.customerId // empty')
@@ -132,15 +212,31 @@ worker() {
     if [ -z "$vid" ]; then continue; fi
 
     for ((i = 1; i <= ORDERS; i++)); do
-      req ordem POST /service-orders "$token" \
+      os=$(req ordem POST /service-orders "$token" \
         "{\"customerId\":\"${cid}\",\"vehicleId\":\"${vid}\",\"problemDescription\":\"Barulho no motor (carga ${i})\"}" \
-        > /dev/null
+        | jq -r '.serviceOrderId // empty')
+      [ -n "$os" ] && ciclo_os "$token" "$os" &
     done
+    # Espera as OSs deste cliente terminarem: limita o paralelismo a WORKERS x ORDERS
+    wait
   done
 }
 
+# Item de catálogo usado no orçamento de todas as OSs
+SETUP_TOKEN=$(req login POST /auth/login "" \
+  "{\"email\":\"${LOGIN_USER}\",\"password\":\"${LOGIN_PASS}\"}" | jq -r '.accessToken // empty')
+SERVICE_ID=$(req servico POST /service "$SETUP_TOKEN" \
+  '{"name":"Revisão (carga)","description":"Serviço usado pelo teste de carga","price":150.00}' \
+  | jq -r '.id // empty')
+if [ -z "$SERVICE_ID" ]; then
+  echo "Não foi possível cadastrar o serviço de catálogo usado nos orçamentos (login ou POST /service falhou)."
+  exit 1
+fi
+
 echo "Alvo: ${BASE}"
 echo "Fluxo: login -> cliente -> veículo -> ${ORDERS} ordens de serviço"
+echo "Cada OS: diagnóstico -> orçamento -> aprovação (${REJECT}% recusa) -> execução -> finalização -> entrega"
+echo "Espera entre etapas: ${DELAY_MIN}-${DELAY_MAX}s"
 echo "Workers em paralelo: ${WORKERS}"
 echo "Ctrl+C encerra e mostra o resumo."
 echo "--------------------------------------------------"
@@ -153,6 +249,6 @@ done
 while true; do
   sleep 15
   echo "--- parcial ($(wc -l < "$STATS") requisições) ---"
-  awk '{c[$1" "$2]++} END {for (k in c) {split(k,p," "); printf "  %-10s %-6s %s\n", p[1], p[2], c[k]}}' \
+  awk '{c[$1" "$2]++} END {for (k in c) {split(k,p," "); printf "  %-13s %-6s %s\n", p[1], p[2], c[k]}}' \
     "$STATS" | sort
 done
