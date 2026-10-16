@@ -57,7 +57,7 @@ Legenda de status: ✅ mitigado · 🟡 parcial / a reforçar · ⚪ não aplic�
 | **A06** | Vulnerable & Outdated Components | 🟡 | **Dependency-Check configurado** (ver Parte 1). Pendente: anexar o relatório do scan e revisar achados. | Rodar `dependencyCheckAnalyze`, tratar achados High/Critical, atualizar versões. |
 | **A07** | Identification & Auth Failures | 🟡 | JWT **stateless** (Resource Server), BCrypt, sessão sem estado. | Mesma dívida do A02: fortalecer/rotacionar `JWT_SECRET`; considerar expiração/refresh e lockout. |
 | **A08** | Software & Data Integrity Failures | 🟡 | CI/CD gitflow com branch-policy; **Dockerfile multi-stage non-root**. | Verificar integridade de dependências (checksums); não confiar em artefatos não assinados no pipeline. |
-| **A09** | Security Logging & Monitoring | 🟡 | Observabilidade via Datadog (APM+Logs, overlay opcional); healthcheck de container. | Adicionar log de eventos de segurança (login falho, acesso negado) sem vazar dados sensíveis. |
+| **A09** | Security Logging & Monitoring | 🟡 | Observabilidade via New Relic (APM, logs JSON e métricas no EKS); healthcheck de container. | Adicionar log de eventos de segurança (login falho, acesso negado) sem vazar dados sensíveis. |
 | **A10** | Server-Side Request Forgery (SSRF) | ⚪ | Sem chamadas de saída controladas por input do usuário. | Reavaliar se surgirem integrações externas / webhooks. |
 
 ---

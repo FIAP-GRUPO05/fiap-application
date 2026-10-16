@@ -99,7 +99,7 @@
 - **Sem log de eventos de autenticação** (`LoginUseCase.java:23`) — login com sucesso/falha não é registrado → impossível detectar o brute-force descrito em A04.
 - **Sem trilha de auditoria** para operações administrativas/CRUD sensíveis (criação/alteração/deleção de clientes, veículos, ordens).
 
-- **Pontos positivos:** nenhum dado sensível (senha/CPF/token) aparece em logs; erros retornam mensagem genérica; Datadog disponível via overlay opcional (`docker-compose.datadog.yaml`, APM + logs); nível de log default `INFO`.
+- **Pontos positivos:** nenhum dado sensível (senha/CPF/token) aparece em logs; erros retornam mensagem genérica; New Relic coleta APM, logs JSON e métricas no EKS; nível de log default `INFO`.
 - **Correção:** logar tentativas de login (sem vazar credenciais) e ações administrativas; alertar sobre picos de falha de autenticação.
 
 ---
