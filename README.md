@@ -8,6 +8,24 @@ priorização, falhas no controle de peças e perda de histórico de clientes e 
 O projeto é um **monolito** desenvolvido com **Domain-Driven Design (DDD)**, expondo **APIs REST**
 documentadas via **Swagger** e protegidas por **autenticação JWT**.
 
+## AWS e CI/CD da Fase 3
+
+A versao implantada usa JWT RS256 emitido pela Lambda, RDS privado e EKS com
+instrumentacao New Relic. Os comandos locais das secoes seguintes continuam
+destinados ao desenvolvimento. E-mail na AWS esta temporariamente em
+`MAIL_TIPE=NONE`.
+
+| Ambiente | Swagger |
+| --- | --- |
+| develop | https://szjrcgb6vj.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html |
+| homol | https://3n6qyl3n18.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html |
+| prod | https://rf4lntvt1f.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html |
+
+O workflow publica imagens imutaveis, verifica seguranca, implanta dentro da VPC
+e executa o regressivo HTTPS de todas as operacoes OpenAPI. Credenciais de
+administracao ficam no Secrets Manager; integrantes nao precisam de chaves AWS
+para contribuir pelo GitHub. Veja [CI/CD e limites da validacao](docs/CI-CD.md).
+
 ## Documentação no MIRO
 
 [Documentação DDD](https://miro.com/app/board/uXjVHIl34Zc=/?share_link_id=851279149523)

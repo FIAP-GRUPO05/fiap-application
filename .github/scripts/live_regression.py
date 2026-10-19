@@ -180,7 +180,7 @@ if missing:
 with tempfile.TemporaryDirectory() as directory:
     from pathlib import Path
     request, response = Path(directory) / "request.json", Path(directory) / "response.json"
-    request.write_text(json.dumps({"environment": environment, "require_apm": True, "require_business": True}))
+    request.write_text(json.dumps({"environment": environment, "require_apm": True, "require_business": True, "require_uptime": True}))
     for attempt in range(12):
         metadata = json.loads(subprocess.run(["aws", "lambda", "invoke", "--function-name", "fiap-observability-probe",
             "--cli-binary-format", "raw-in-base64-out", "--payload", f"file://{request}", str(response), "--output", "json"],
