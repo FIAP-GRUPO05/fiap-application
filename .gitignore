@@ -44,3 +44,9 @@ docs/docusauros/
 *.pdf
 *.bundle
 application-local.properties
+__pycache__/
+*.pyc
+*.tfplan
+*.tfstate
+*.tfstate.*
+.terraform/
