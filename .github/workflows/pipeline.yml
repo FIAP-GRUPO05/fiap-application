@@ -150,6 +150,16 @@ jobs:
           aws-region: sa-east-1
           role-to-assume: arn:aws:iam::456687462806:role/fiap-gh-deploy-fiap-application
           allowed-account-ids: '456687462806'
+      - name: Aplicar Terraform do registro ECR
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Atualizar registro ECR protegido
+        shell: bash
+        run: |
+          terraform -chdir=infra/registry init -backend-config=backend.hcl -input=false
+          terraform -chdir=infra/registry plan -input=false -out=registry.tfplan
+          terraform -chdir=infra/registry apply -input=false -auto-approve registry.tfplan
       - name: 12 - Preparar imagem imutável
         id: image
         shell: bash
