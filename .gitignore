@@ -44,4 +44,9 @@ docs/docusauros/
 *.pdf
 *.bundle
 application-local.properties
-dd-java-agent.jar
+__pycache__/
+*.pyc
+*.tfplan
+*.tfstate
+*.tfstate.*
+.terraform/
