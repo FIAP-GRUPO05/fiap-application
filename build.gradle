@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'jacoco'
-    id 'org.springframework.boot' version '3.2.0'
+    id 'org.springframework.boot' version '3.5.16'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'info.solidsoft.pitest' version '1.15.0'
     id "org.owasp.dependencycheck" version "12.2.2"
@@ -18,9 +18,14 @@ java {
     }
 }
 
-// Spring Boot 3.2 manages Flyway 9.x (no PostgreSQL 17 support). Override to
-// Flyway 10.x so PostgreSQL 17 is supported via flyway-database-postgresql.
+// Keep Flyway core and its PostgreSQL module on the same validated version.
 ext['flyway.version'] = '10.20.1'
+// Security patch releases newer than the versions managed by Boot's BOM.
+ext['tomcat.version'] = '10.1.61'
+ext['netty.version'] = '4.1.139.Final'
+ext['jackson-bom.version'] = '2.21.7'
+ext['httpcore5.version'] = '5.4.4'
+ext['postgresql.version'] = '42.7.14'
 
 repositories {
     mavenCentral()
@@ -32,15 +37,15 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.1'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     // E-mail (notificações de mudança de status da OS) via SMTP genérico
     implementation 'org.springframework.boot:spring-boot-starter-mail'
-    implementation 'software.amazon.awssdk:lambda:2.25.0'
+    implementation 'software.amazon.awssdk:lambda:2.56.0'
     // Observabilidade: API do agente New Relic (no-op sem o agente, que o operador injeta
     // no pod) e logs estruturados em JSON
-    implementation 'com.newrelic.agent.java:newrelic-api:8.14.0'
-    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
+    implementation 'com.newrelic.agent.java:newrelic-api:9.5.0'
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.1'
     // Persistence (PostgreSQL) — added per ADR-002 implementation plan
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'org.postgresql:postgresql'

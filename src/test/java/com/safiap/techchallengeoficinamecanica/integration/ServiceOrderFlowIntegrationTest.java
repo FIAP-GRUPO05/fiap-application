@@ -45,7 +45,7 @@ class ServiceOrderFlowIntegrationTest {
     @Test
     @DisplayName("walks through the full service order flow end to end")
     void fullServiceOrderLifecycle() throws Exception {
-        mockMvc.perform(post("/auth/register")
+        mockMvc.perform(post("/auth/register").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("bootstrap").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(body("register"))))
                 .andExpect(status().isCreated());
@@ -247,7 +247,7 @@ class ServiceOrderFlowIntegrationTest {
     @DisplayName("answers 400 with field errors instead of 500 when the payload is invalid")
     void invalidPayloadsAreRejectedWithBadRequest() throws Exception {
         Map<String, Object> account = Map.of("email", "validation@oficina.com", "password", "senha123");
-        mockMvc.perform(post("/auth/register")
+        mockMvc.perform(post("/auth/register").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("bootstrap").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(account)))
                 .andExpect(status().isCreated());

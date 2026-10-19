@@ -14,7 +14,7 @@ import java.util.UUID;
 public class JpaPartEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    // The domain creates the UUID before mapping this entity.
     private UUID id;
     @Column(nullable = false)
     private String name;

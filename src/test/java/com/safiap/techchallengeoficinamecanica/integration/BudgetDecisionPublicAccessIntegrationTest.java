@@ -168,7 +168,7 @@ class BudgetDecisionPublicAccessIntegrationTest {
     /** Abre uma OS e a leva ate AWAITING_APPROVAL usando um token de oficina. */
     private String givenOrderAwaitingApproval(String suffix) throws Exception {
         String email = "publico-" + suffix + "-" + UUID.randomUUID() + "@oficina.local";
-        mockMvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/auth/register").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("bootstrap").roles("ADMIN")).contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("email", email, "password", "teste123"))))
                 .andExpect(status().isCreated());
 

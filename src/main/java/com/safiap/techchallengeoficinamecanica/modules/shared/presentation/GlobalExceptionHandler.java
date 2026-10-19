@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -42,6 +43,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAuth(AuthException ex, HttpServletRequest request) {
         logClientError(HttpStatus.UNAUTHORIZED, ex, request);
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataConflict(DataIntegrityViolationException ex, HttpServletRequest request) {
+        // Preserve relational history without disclosing SQL, table names or stored values.
+        log.warn("{} {} -> 409 relational constraint conflict", request.getMethod(), request.getRequestURI());
+        return build(HttpStatus.CONFLICT, "The operation conflicts with existing records", request);
     }
 
     @ExceptionHandler(DomainException.class)
