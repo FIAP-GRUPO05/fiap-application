@@ -2,10 +2,10 @@ name: Phase 3 Pipeline
 
 on:
   push:
-    branches: ['feature/**', 'rollback/**', 'rolback/**']
+    branches: ['feature/**', 'rollback/**', 'rolback/**', develop, 'release/**', prod]
   pull_request:
     branches: [develop, 'release/**', prod, main]
-    types: [opened, reopened, synchronize, closed]
+    types: [opened, reopened, synchronize]
 
 concurrency:
   group: pipeline-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
@@ -41,8 +41,10 @@ jobs:
           SOURCE_BRANCH: ${{ github.ref_name }}
         shell: bash
         run: |
-          if [[ ! "$SOURCE_BRANCH" =~ ^(feature|rollback|rolback)/[a-z0-9][a-z0-9._/-]*$ ]]; then
-            echo '::error::Use feature/<descricao> ou rollback/<descricao> (rolback/* também é aceito) em minúsculas.'; exit 1
+          if [[ ! "$SOURCE_BRANCH" =~ ^(feature|rollback|rolback)/[a-z0-9][a-z0-9._/-]*$ &&
+                "$SOURCE_BRANCH" != develop && "$SOURCE_BRANCH" != prod &&
+                ! "$SOURCE_BRANCH" =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo '::error::Use feature/<descricao>, rollback/<descricao>, develop, release/vX.Y.Z ou prod.'; exit 1
           fi
       - name: 00 - Explicar a promoção simples para main
         if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
@@ -52,11 +54,12 @@ jobs:
     name: Verify
     needs: route
     if: >-
-      github.event_name == 'push' && startsWith(github.ref_name, 'feature/') ||
+      github.event_name == 'push' &&
+      (startsWith(github.ref_name, 'feature/') || !github.event.created &&
+       (github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod')) ||
       github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main' &&
       !startsWith(github.event.pull_request.head.ref, 'rollback/') &&
-      !startsWith(github.event.pull_request.head.ref, 'rolback/') &&
-      (github.event.action != 'closed' || github.event.pull_request.merged == true)
+      !startsWith(github.event.pull_request.head.ref, 'rolback/')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,7 +69,9 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-          ref: ${{ github.event.action == 'closed' && github.event.pull_request.base.ref || github.sha }}
+          ref: ${{ github.sha }}
+      - name: Validar rotas de promocao e SemVer
+        run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
       - name: 01a - Autenticar na AWS TWM por OIDC
         if: github.event_name == 'pull_request'
         uses: aws-actions/configure-aws-credentials@v6.3.0
@@ -87,10 +92,19 @@ jobs:
       - name: 04 - Build e testes
         run: ./gradlew clean build --no-daemon
       - name: 05 - Cobertura mínima de 90%
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod'
         run: ./gradlew jacocoTestCoverageVerification --no-daemon
+      - name: Validar Terraform do registro de imagens
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Build Terraform sem backend remoto
+        run: |
+          terraform -chdir=infra/registry fmt -check
+          terraform -chdir=infra/registry init -backend=false -input=false
+          terraform -chdir=infra/registry validate
       - name: 06 - Segurança de dependências e configuração
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -99,24 +113,112 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
       - name: 07 - Observabilidade New Relic configurada
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod'
         shell: bash
         run: |
           grep -q 'newrelic-api' build.gradle
           grep -Riq 'com.newrelic' src/main/java
           echo 'API New Relic presente; o agente do EKS é validado no repositório fiap-k8s.'
-      - name: 08 - Conectividade externa simulada
+      - name: 08 - Conectividade externa real do ambiente de origem
         if: github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'develop'
-        run: python .github/scripts/mock_external.py
+        env:
+          FIAP_RUNTIME_CONFIG: ${{ vars.FIAP_RUNTIME_CONFIG }}
+          SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: python .github/scripts/verify_external.py
       - name: 09 - Regressão de endpoints
         if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'prod'
         run: python .github/scripts/regression_inventory.py
+
+  publish:
+    name: Publish image
+    needs: [route, verify]
+    if: >-
+      github.event_name == 'push' && !github.event.created && needs.verify.result == 'success' &&
+      (github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: 10 - Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: 11 - Autenticar na AWS por OIDC
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          aws-region: sa-east-1
+          role-to-assume: arn:aws:iam::456687462806:role/fiap-gh-deploy-fiap-application
+          allowed-account-ids: '456687462806'
+      - name: 12 - Preparar imagem imutável
+        id: image
+        shell: bash
+        env:
+          ECR_REPOSITORY: 456687462806.dkr.ecr.sa-east-1.amazonaws.com/fiap-application
+          FIAP_RUNTIME_CONFIG: ${{ vars.FIAP_RUNTIME_CONFIG }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME//\//-}-${GITHUB_SHA}"
+          case "$GITHUB_REF_NAME" in
+            develop) namespace=develop ;;
+            release/*) namespace=homol ;;
+            prod) namespace=prod ;;
+            *) echo 'Branch de publicação inválida'; exit 2 ;;
+          esac
+          aws ecr get-login-password --region sa-east-1 | docker login --username AWS --password-stdin 456687462806.dkr.ecr.sa-east-1.amazonaws.com
+          exists=$(aws ecr list-images --repository-name fiap-application --filter tagStatus=TAGGED --query "imageIds[?imageTag=='$tag'].imageTag | [0]" --output text)
+          if [[ "$exists" == "$tag" ]]; then
+            docker pull "$ECR_REPOSITORY:$tag"
+          else
+            docker build --pull --tag "$ECR_REPOSITORY:$tag" .
+          fi
+          echo "uri=$ECR_REPOSITORY:$tag" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "namespace=$namespace" >> "$GITHUB_OUTPUT"
+      - name: 13 - Bloquear imagem vulnerável
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.uri }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          trivyignores: .trivyignore
+      - name: 14 - Publicar imagem aprovada
+        if: steps.image.outputs.exists == 'None'
+        env:
+          IMAGE_URI: ${{ steps.image.outputs.uri }}
+        run: docker push "$IMAGE_URI"
+      - name: 15 - Deploy privado e validação real de banco e New Relic
+        shell: bash
+        env:
+          FIAP_RUNTIME_CONFIG: ${{ vars.FIAP_RUNTIME_CONFIG }}
+          NAMESPACE: ${{ steps.image.outputs.namespace }}
+          IMAGE_URI: ${{ steps.image.outputs.uri }}
+        run: |
+          set -euo pipefail
+          namespace="$NAMESPACE"
+          jwt_issuer=$(python -c 'import json,os,sys; c=json.loads(os.environ.get("FIAP_RUNTIME_CONFIG") or "{}"); print(c.get(sys.argv[1],{}).get("issuer",""))' "$namespace")
+          test -n "$jwt_issuer" || { echo '::error::FIAP_RUNTIME_CONFIG deve conter o issuer do ambiente'; exit 1; }
+          build_id=$(aws codebuild start-build \
+            --project-name fiap-eks-deploy \
+            --environment-variables-override \
+              "name=IMAGE_URI,value=$IMAGE_URI,type=PLAINTEXT" \
+              "name=DEPLOY_NAMESPACE,value=$namespace,type=PLAINTEXT" \
+              "name=JWT_ISSUER,value=$jwt_issuer,type=PLAINTEXT" \
+            --query build.id --output text)
+          python .github/scripts/wait_codebuild.py "$build_id"
+      - name: 16 - Regressão HTTPS de todas as operações publicadas
+        env:
+          FIAP_RUNTIME_CONFIG: ${{ vars.FIAP_RUNTIME_CONFIG }}
+          NAMESPACE: ${{ steps.image.outputs.namespace }}
+        run: python .github/scripts/live_regression.py "$NAMESPACE"
 
   propose:
     name: Propose
     needs: [route, verify]
     if: >-
-      always() && github.event_name == 'push' && needs.route.result == 'success' &&
+      always() && github.event_name == 'push' &&
+      (startsWith(github.ref_name, 'feature/') || startsWith(github.ref_name, 'rollback/') || startsWith(github.ref_name, 'rolback/')) &&
+      needs.route.result == 'success' &&
       (needs.verify.result == 'success' ||
        (needs.verify.result == 'skipped' &&
         (startsWith(github.ref_name, 'rollback/') || startsWith(github.ref_name, 'rolback/'))))
@@ -130,16 +232,16 @@ jobs:
         with:
           persist-credentials: false
       - name: 10a - Criar token do GitHub App da organizacao
-        if: vars.FIAP_PROMOTION_APP_CLIENT_ID != ''
+        if: vars.FIAP_PROMOTION_APP_CLIENT_ID != '' || vars.FIAP_PROMOTION_APP_ID != ''
         id: promotion-token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ vars.FIAP_PROMOTION_APP_CLIENT_ID }}
+          client-id: ${{ vars.FIAP_PROMOTION_APP_CLIENT_ID || vars.FIAP_PROMOTION_APP_ID }}
           private-key: ${{ secrets.FIAP_PROMOTION_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
       - name: 10b - Avisar sobre aprovacao manual da esteira
-        if: vars.FIAP_PROMOTION_APP_CLIENT_ID == ''
+        if: vars.FIAP_PROMOTION_APP_CLIENT_ID == '' && vars.FIAP_PROMOTION_APP_ID == ''
         run: echo '::warning::Configure o GitHub App de promocao para que PRs gerados automaticamente iniciem a esteira sem aprovacao manual.'
       - name: 11 - Abrir PR para develop ou release
         env:
@@ -148,14 +250,11 @@ jobs:
 
   promote:
     name: Promote
-    needs: [route, verify]
+    needs: [route, verify, publish]
     if: >-
-      always() && github.event_name == 'pull_request' && github.event.action == 'closed' &&
-      github.event.pull_request.merged == true && needs.route.result == 'success' &&
-      (needs.verify.result == 'success' ||
-       (needs.verify.result == 'skipped' &&
-        (startsWith(github.event.pull_request.head.ref, 'rollback/') ||
-         startsWith(github.event.pull_request.head.ref, 'rolback/'))))
+      always() && github.event_name == 'push' && !github.event.created &&
+      (github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod') &&
+      needs.route.result == 'success' && needs.verify.result == 'success' && needs.publish.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -165,18 +264,18 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.ref_name }}
       - name: 10a - Criar token do GitHub App da organizacao
-        if: vars.FIAP_PROMOTION_APP_CLIENT_ID != ''
+        if: vars.FIAP_PROMOTION_APP_CLIENT_ID != '' || vars.FIAP_PROMOTION_APP_ID != ''
         id: promotion-token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ vars.FIAP_PROMOTION_APP_CLIENT_ID }}
+          client-id: ${{ vars.FIAP_PROMOTION_APP_CLIENT_ID || vars.FIAP_PROMOTION_APP_ID }}
           private-key: ${{ secrets.FIAP_PROMOTION_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
       - name: 10b - Avisar sobre aprovacao manual da esteira
-        if: vars.FIAP_PROMOTION_APP_CLIENT_ID == ''
+        if: vars.FIAP_PROMOTION_APP_CLIENT_ID == '' && vars.FIAP_PROMOTION_APP_ID == ''
         run: echo '::warning::Configure o GitHub App de promocao para que PRs gerados automaticamente iniciem a esteira sem aprovacao manual.'
       - name: 11 - Abrir PR da próxima etapa
         env:
