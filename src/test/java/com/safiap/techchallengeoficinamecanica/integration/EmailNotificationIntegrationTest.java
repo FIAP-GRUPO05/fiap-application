@@ -82,7 +82,7 @@ class EmailNotificationIntegrationTest {
                 "email", "notify@oficina.com",
                 "password", "senha123");
 
-        mockMvc.perform(post("/auth/register")
+        mockMvc.perform(post("/auth/register").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("bootstrap").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(credentials)))
                 .andExpect(status().isCreated());

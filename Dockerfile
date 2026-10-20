@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for Spring Boot (Java 21)
 # Builder: uses project wrapper to produce a fat jar
-FROM eclipse-temurin:21-jdk AS builder
+FROM eclipse-temurin:21-jdk-noble AS builder
 WORKDIR /work
 
 # Copy gradle wrapper and project files
@@ -14,7 +14,7 @@ RUN chmod +x ./gradlew && \
     ./gradlew bootJar --no-daemon -x test
 
 # Runtime image: slim JRE
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre-noble
 WORKDIR /app
 
 # curl is needed by the container healthcheck; run as non-root (least privilege)
