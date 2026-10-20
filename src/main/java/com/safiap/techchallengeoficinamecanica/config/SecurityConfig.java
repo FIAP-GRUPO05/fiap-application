@@ -61,7 +61,8 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/auth/login", "/auth/register", "/auth/register-account").permitAll()
+                        .requestMatchers("/", "/auth/login", "/auth/register-account").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/register").hasRole("ADMIN")
                         // "/**" cobre também os grupos /actuator/health/{liveness,readiness}
                         // usados pelas probes do Kubernetes; sem isso elas tomam 401.
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()

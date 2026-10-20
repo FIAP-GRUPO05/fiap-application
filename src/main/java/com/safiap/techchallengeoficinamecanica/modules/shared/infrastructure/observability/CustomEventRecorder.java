@@ -24,6 +24,10 @@ public final class CustomEventRecorder {
             }
         });
         String correlationId = MDC.get(ObservabilityKeys.CORRELATION_ID);
+        String applicationName = System.getenv("NEW_RELIC_APP_NAME");
+        if (applicationName != null && !applicationName.isBlank()) {
+            event.put("appName", applicationName);
+        }
         if (correlationId != null) {
             event.put(ObservabilityKeys.CORRELATION_ID, correlationId);
         }
