@@ -1,0 +1,8 @@
+# CVE applies to XsltView with wildcard view rendering. This REST application
+# configures neither. The authorization integration suite enforces this invariant.
+# https://spring.io/security/cve-2026-47884/
+# See docs/security-exceptions.md; reassess before adding MVC/XSLT views.
+CVE-2026-47884
+# No SSE/view-fragment endpoints. Enforced by the integration suite.
+# https://spring.io/security/cve-2026-47890/
+CVE-2026-47890

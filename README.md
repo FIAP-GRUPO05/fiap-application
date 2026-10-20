@@ -8,6 +8,24 @@ priorização, falhas no controle de peças e perda de histórico de clientes e 
 O projeto é um **monolito** desenvolvido com **Domain-Driven Design (DDD)**, expondo **APIs REST**
 documentadas via **Swagger** e protegidas por **autenticação JWT**.
 
+## AWS e CI/CD da Fase 3
+
+A versao implantada usa JWT RS256 emitido pela Lambda, RDS privado e EKS com
+instrumentacao New Relic. Os comandos locais das secoes seguintes continuam
+destinados ao desenvolvimento. E-mail na AWS esta temporariamente em
+`MAIL_TIPE=NONE`.
+
+| Ambiente | Swagger |
+| --- | --- |
+| develop | https://szjrcgb6vj.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html |
+| homol | https://3n6qyl3n18.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html |
+| prod | https://rf4lntvt1f.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html |
+
+O workflow publica imagens imutaveis, verifica seguranca, implanta dentro da VPC
+e executa o regressivo HTTPS de todas as operacoes OpenAPI. Credenciais de
+administracao ficam no Secrets Manager; integrantes nao precisam de chaves AWS
+para contribuir pelo GitHub. Veja [CI/CD e limites da validacao](docs/CI-CD.md).
+
 ## Documentação no MIRO
 
 [Documentação DDD](https://miro.com/app/board/uXjVHIl34Zc=/?share_link_id=851279149523)
@@ -224,49 +242,19 @@ docker compose down          # para e remove os containers (mantém o volume de 
 docker compose down -v       # também remove o volume de dados do PostgreSQL (apaga os dados)
 ```
 
-## Observabilidade (Datadog) — opcional
+## Observabilidade (New Relic)
 
-A observabilidade (**APM/traces, logs e métricas**) é **opt-in** via um overlay de compose
-(`docker-compose.datadog.yaml`). O `docker-compose.yaml` base sobe app + banco **sem** Datadog;
-quem quiser telemetria ativa o overlay. **Nenhuma chave fica no repositório** — cada membro usa a
-sua própria `DD_API_KEY` da organização compartilhada (site **us5.datadoghq.com**).
+No EKS, o `nri-bundle` coleta métricas de Kubernetes e logs dos containers. O operador
+injeta o agente Java nos pods da API para APM e traces distribuídos. O perfil
+`json-logs` escreve uma linha JSON por evento com `correlationId`, `trace.id` e
+`span.id`. A infraestrutura, os alertas e os dashboards são definidos no repositório
+`fiap-k8s`, em `infra/prod/newrelic*.tf`.
 
-### Como funciona
-- O **Datadog Agent** roda em container (overlay) e encaminha tudo para a org us5.
-- O **dd-java-agent** instrumenta o backend automaticamente (`-javaagent`), sem alterar código.
-- A `DD_API_KEY` é usada **só pelo Agent**. O `docker compose` lê `${DD_API_KEY}` do `.env`
-  **ou** de uma variável de ambiente do processo.
-
-### Onboarding de um novo membro
-1. **Entrar na org do Datadog** (peça convite ao responsável: *Organization Settings → Users*) e
-   **gerar a sua API Key** (*Organization Settings → API Keys*).
-2. **Vincular a chave** — escolha **uma** das formas:
-   - **`.env`** (recomendado): `cp .env.example .env` e preencha `DD_API_KEY`.
-   - **Variável de ambiente** (ex.: IntelliJ → *Run → Edit Configurations → Environment variables*
-     → `DD_API_KEY=...`), ou no shell antes de subir: `export DD_API_KEY=...`.
-3. **Baixar o tracer Java** na raiz do projeto (é git-ignored, não vai versionado):
-   ```bash
-   curl -Lo dd-java-agent.jar 'https://dtdg.co/latest-java-tracer'
-   ```
-4. **Subir com o overlay**:
-   ```bash
-   docker compose -f docker-compose.yaml -f docker-compose.datadog.yaml up -d
-   ```
-   > Dica: descomente `COMPOSE_FILE=docker-compose.yaml:docker-compose.datadog.yaml` no `.env`
-   > e aí basta `docker compose up -d`.
-
-### Como ver os dados (UI compartilhada em app.us5.datadoghq.com)
-- **Logs Explorer** → filtro `service:oficina-sistema` (cada log traz `dd.trace_id` p/ correlação).
-- **APM → Services** → `oficina-sistema` (traces das requisições, com SQL do PostgreSQL).
-- **Dashboards / Infrastructure** → métricas de JVM, CPU e memória.
-
-### Validação
-```bash
-docker compose -f docker-compose.yaml -f docker-compose.datadog.yaml exec dd-agent agent status "apm agent"
-```
-
-> Como todos rodam com `service:oficina-sistema` / `env:dev`, os dados dos devs se misturam na org.
-> Para distinguir, cada um pode adicionar uma tag própria (ex.: `DD_TAGS=developer:seunome`).
+O Compose local continua útil para testar a API e os logs, sem enviar telemetria.
+Para verificar o formato JSON localmente, execute o backend com
+`SPRING_PROFILES_ACTIVE=json-logs`. No EKS, confirme no New Relic os serviços de
+APM, os pods, o monitor de `/actuator/health`, o dashboard e os eventos
+`ServiceOrderStatusChanged` após percorrer uma ordem de serviço.
 
 ## Executando a API sem containers (opcional)
 Com uma instância do PostgreSQL acessível (ex.: `docker compose up postgres -d`), aponte o
@@ -502,12 +490,13 @@ kubectl get hpa api-hpa -n prod -w     # TARGETS deve mostrar percentuais, nunca
 
 ### CI/CD
 
-O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda em todo push/PR para
-`develop` e `main`: executa a suíte de testes e publica o relatório. Somente em `main`
-segue para o deploy — build e push da imagem para o Docker Hub
-(`timbeck97/tc-fiap:latest` e `:<run_number>`), autenticação na AWS (OIDC com fallback para chaves
-estáticas), `aws eks update-kubeconfig` e `kubectl rollout restart deployment/api -n prod`.
-Como o Deployment usa `RollingUpdate` com `maxUnavailable: 0`, a troca de versão é sem downtime.
+O workflow [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) valida
+`feature/*`, cria o PR para `develop` e promove os merges aprovados por
+`release/vX.Y.Z`, `prod` e `main`. Os gates incluem build, testes, cobertura,
+segurança e observabilidade. A conectividade com AWS e New Relic é simulada
+localmente nesta etapa; não há publicação de imagem nem deploy automático.
+O fluxo completo e os passos para ativar as regras no GitHub estão em
+[`docs/CI-CD.md`](docs/CI-CD.md).
 
 ## Membros da Equipe
 

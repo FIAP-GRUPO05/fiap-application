@@ -22,12 +22,17 @@ import software.amazon.awssdk.services.lambda.model.InvokeResponse;
 
 public class LambdaEmailSenderAdapter implements EmailSenderPort {
 
-    private final LambdaClient lambdaClient = LambdaClient.builder().build();
+    private final LambdaClient lambdaClient;
     private final ObjectMapper objectMapper;
     private final Logger log = LoggerFactory.getLogger(this.getClass());
 
     public LambdaEmailSenderAdapter(ObjectMapper objectMapper) {
+        this(objectMapper, LambdaClient.builder().build());
+    }
+
+    LambdaEmailSenderAdapter(ObjectMapper objectMapper, LambdaClient lambdaClient) {
         this.objectMapper = objectMapper;
+        this.lambdaClient = lambdaClient;
     }
 
     @Override
