@@ -46,9 +46,10 @@ jobs:
         if [[ "$SOURCE" == feature/destroy-infra-aws || "$BASE" == ALL || "$BRANCH" == ALL ]]; then
           operational=true
         fi
+        echo "infra_state=$state" >> "$GITHUB_OUTPUT"
         echo "maintenance=$maintenance" >> "$GITHUB_OUTPUT"
         echo "destroy_request=$operational" >> "$GITHUB_OUTPUT"
-        if [[ "$maintenance" == true ]]; then echo 'Infraestrutura em manutenção/desmontada; deploys e promoções normais bloqueados.'; fi
+        if [[ "$state" == maintenance ]]; then echo 'Manutenção: validações de código e PRs automáticos liberados; deploys bloqueados.'; elif [[ "$maintenance" == true ]]; then echo 'Desmontagem: publicações e promoções normais bloqueadas.'; fi
         if [[ "$operational" == true ]]; then echo '::error::Solicite destroy no repositório FIAP-GRUPO05/fiap-k8s'; exit 1; fi
     - name: 00 - Validar a origem e o destino do PR
       if: github.event_name == 'pull_request'
@@ -84,11 +85,12 @@ jobs:
     outputs:
       maintenance: ${{ steps.operation.outputs.maintenance }}
       destroy_request: ${{ steps.operation.outputs.destroy_request }}
+      infra_state: ${{ steps.operation.outputs.infra_state }}
   verify:
     name: Verify
     needs: route
     if: |-
-      (needs.route.outputs.maintenance != 'true' || startsWith(github.ref_name, 'feature/') || github.event.pull_request.base.ref == 'develop') && needs.route.outputs.destroy_request != 'true' && (github.event_name == 'push' && (startsWith(github.ref_name, 'feature/') || !github.event.created &&
+      (needs.route.outputs.infra_state == 'active' || needs.route.outputs.infra_state == 'maintenance' || startsWith(github.ref_name, 'feature/') || github.event.pull_request.base.ref == 'develop') && needs.route.outputs.destroy_request != 'true' && (github.event_name == 'push' && (startsWith(github.ref_name, 'feature/') || !github.event.created &&
        (github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod')) ||
       github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main' && !startsWith(github.event.pull_request.head.ref, 'rollback/') && !startsWith(github.event.pull_request.head.ref, 'rolback/'))
     runs-on: ubuntu-latest
@@ -101,43 +103,53 @@ jobs:
       with:
         persist-credentials: false
         ref: ${{ github.sha }}
+      id: check_0
     - name: Validar rotas de promocao e SemVer
       run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      id: check_1
     - name: 01a - Autenticar na AWS TWM por OIDC
-      if: github.event_name == 'pull_request'
+      if: needs.route.outputs.infra_state == 'active' && (github.event_name == 'pull_request')
       uses: aws-actions/configure-aws-credentials@v6.3.0
       with:
         aws-region: sa-east-1
         role-to-assume: arn:aws:iam::456687462806:role/fiap-gh-preflight-fiap-application
         allowed-account-ids: '456687462806'
+      id: check_2
     - name: 01b - Confirmar identidade AWS
-      if: github.event_name == 'pull_request'
+      if: needs.route.outputs.infra_state == 'active' && (github.event_name == 'pull_request')
       run: aws sts get-caller-identity --query Arn --output text
+      id: check_3
     - name: 02 - JDK 21
       uses: actions/setup-java@v5
       with:
         distribution: temurin
         java-version: '21'
+      id: check_4
     - name: 03 - Gradle
       uses: gradle/actions/setup-gradle@v5
+      id: check_5
     - name: 04 - Build e testes
       run: ./gradlew clean build --no-daemon
+      id: check_6
     - name: 05 - Cobertura mínima de 90%
-      if: github.event_name == 'pull_request' || github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') ||
-        github.ref_name == 'prod'
+      if: needs.route.outputs.infra_state == 'maintenance' || (github.event_name == 'pull_request' || github.ref_name == 'develop'
+        || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod')
       run: ./gradlew jacocoTestCoverageVerification --no-daemon
+      id: check_7
     - name: Validar Terraform do registro de imagens
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_wrapper: false
+      id: check_8
     - name: Build Terraform sem backend remoto
       run: |
         terraform -chdir=infra/registry fmt -check
         terraform -chdir=infra/registry init -backend=false -input=false
         terraform -chdir=infra/registry validate
+      id: check_9
     - name: 06 - Segurança de dependências e configuração
-      if: github.event_name == 'pull_request' || github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') ||
-        github.ref_name == 'prod'
+      if: needs.route.outputs.infra_state == 'maintenance' || (github.event_name == 'pull_request' || github.ref_name == 'develop'
+        || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod')
       uses: aquasecurity/trivy-action@v0.36.0
       with:
         scan-type: fs
@@ -145,23 +157,48 @@ jobs:
         scanners: vuln,misconfig,secret
         severity: HIGH,CRITICAL
         exit-code: '1'
+      id: check_10
     - name: 07 - Observabilidade New Relic configurada
-      if: github.event_name == 'pull_request' || github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') ||
-        github.ref_name == 'prod'
+      if: needs.route.outputs.infra_state == 'maintenance' || (github.event_name == 'pull_request' || github.ref_name == 'develop'
+        || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod')
       shell: bash
       run: |
         grep -q 'newrelic-api' build.gradle
         grep -Riq 'com.newrelic' src/main/java
         echo 'API New Relic presente; o agente do EKS é validado no repositório fiap-k8s.'
+      id: check_11
     - name: 08 - Conectividade externa real do ambiente de origem
-      if: github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'develop'
+      if: needs.route.outputs.infra_state == 'active' && (github.event_name == 'pull_request' && github.event.pull_request.base.ref
+        != 'develop')
       env:
         FIAP_RUNTIME_CONFIG: ${{ vars.FIAP_RUNTIME_CONFIG }}
         SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
       run: python .github/scripts/verify_external.py
+      id: check_12
     - name: 09 - Regressão de endpoints
       if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'prod'
       run: python .github/scripts/regression_inventory.py
+      id: check_13
+    - name: Resumo das validações executadas e pendências externas
+      id: validation_summary
+      if: always()
+      env:
+        FIAP_INFRA_STATE: ${{ needs.route.outputs.infra_state }}
+        CI_JOB_STATUS: ${{ job.status }}
+        CI_VALIDATION_STEPS: '[{"name": "01 - Checkout", "outcome": "${{ steps.check_0.outcome }}"}, {"name": "Validar rotas
+          de promocao e SemVer", "outcome": "${{ steps.check_1.outcome }}"}, {"name": "01a - Autenticar na AWS TWM por OIDC",
+          "outcome": "${{ steps.check_2.outcome }}"}, {"name": "01b - Confirmar identidade AWS", "outcome": "${{ steps.check_3.outcome
+          }}"}, {"name": "02 - JDK 21", "outcome": "${{ steps.check_4.outcome }}"}, {"name": "03 - Gradle", "outcome": "${{
+          steps.check_5.outcome }}"}, {"name": "04 - Build e testes", "outcome": "${{ steps.check_6.outcome }}"}, {"name":
+          "05 - Cobertura mínima de 90%", "outcome": "${{ steps.check_7.outcome }}"}, {"name": "Validar Terraform do registro
+          de imagens", "outcome": "${{ steps.check_8.outcome }}"}, {"name": "Build Terraform sem backend remoto", "outcome":
+          "${{ steps.check_9.outcome }}"}, {"name": "06 - Segurança de dependências e configuração", "outcome": "${{ steps.check_10.outcome
+          }}"}, {"name": "07 - Observabilidade New Relic configurada", "outcome": "${{ steps.check_11.outcome }}"}, {"name":
+          "08 - Conectividade externa real do ambiente de origem", "outcome": "${{ steps.check_12.outcome }}"}, {"name": "09
+          - Regressão de endpoints", "outcome": "${{ steps.check_13.outcome }}"}]'
+      run: python .github/scripts/ci_summary.py
+    env:
+      AWS_EC2_METADATA_DISABLED: 'true'
   publish:
     name: Publish image
     needs:
@@ -308,15 +345,18 @@ jobs:
       env:
         GH_TOKEN: ${{ steps.promotion-token.outputs.token || secrets.GITHUB_TOKEN }}
       run: python .github/scripts/flow.py promote
+    env:
+      FIAP_INFRA_STATE: ${{ needs.route.outputs.infra_state }}
   promote:
     name: Promote
     needs:
     - route
     - verify
     - publish
-    if: needs.route.outputs.maintenance != 'true' && needs.route.outputs.destroy_request != 'true' && (always() && github.event_name
-      == 'push' && !github.event.created && (github.ref_name == 'develop' || startsWith(github.ref_name, 'release/') || github.ref_name
-      == 'prod') && needs.route.result == 'success' && needs.verify.result == 'success' && needs.publish.result == 'success')
+    if: always() && !cancelled() && github.event_name == 'push' && !github.event.created && (github.ref_name == 'develop'
+      || startsWith(github.ref_name, 'release/') || github.ref_name == 'prod') && needs.route.result == 'success' && needs.route.outputs.destroy_request
+      != 'true' && needs.verify.result == 'success' && (needs.route.outputs.infra_state == 'maintenance' || (needs.route.outputs.infra_state
+      == 'active' && needs.publish.result == 'success'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -344,3 +384,5 @@ jobs:
       env:
         GH_TOKEN: ${{ steps.promotion-token.outputs.token || secrets.GITHUB_TOKEN }}
       run: python .github/scripts/flow.py promote
+    env:
+      FIAP_INFRA_STATE: ${{ needs.route.outputs.infra_state }}
