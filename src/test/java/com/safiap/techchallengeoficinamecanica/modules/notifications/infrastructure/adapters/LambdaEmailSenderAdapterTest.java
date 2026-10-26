@@ -23,12 +23,28 @@ class LambdaEmailSenderAdapterTest {
     @Test
     void invokesEmailLambdaWithSerializedPayload() {
         when(client.invoke(any(InvokeRequest.class))).thenReturn(InvokeResponse.builder()
-                .statusCode(200).payload(SdkBytes.fromUtf8String("ok")).build());
+                .statusCode(200).payload(SdkBytes.fromUtf8String("{\"statusCode\":200,\"messageId\":\"ses-id\"}")).build());
         adapter.send(message);
         var request = org.mockito.ArgumentCaptor.forClass(InvokeRequest.class);
         verify(client).invoke(request.capture());
-        assertThat(request.getValue().functionName()).isEqualTo("lambda-email");
+        assertThat(request.getValue().functionName()).isEqualTo("fiap-email-develop:live");
         assertThat(request.getValue().payload().asUtf8String()).contains("client@example.test");
+    }
+
+    @Test
+    void propagatesCorrelationAndRejectsProviderErrorsWithoutExposingPayload() {
+        var custom = new LambdaEmailSenderAdapter(new ObjectMapper(), client, "fiap-email-prod:live");
+        when(client.invoke(any(InvokeRequest.class))).thenReturn(InvokeResponse.builder()
+                .statusCode(200).payload(SdkBytes.fromUtf8String("{\"statusCode\":500,\"body\":\"private recipient\"}")).build());
+        org.slf4j.MDC.put("correlationId", "notification-123");
+        try {
+            assertThatThrownBy(() -> custom.send(message)).isInstanceOf(IllegalStateException.class)
+                    .hasMessageNotContaining("private recipient");
+        } finally { org.slf4j.MDC.clear(); }
+        var request = org.mockito.ArgumentCaptor.forClass(InvokeRequest.class);
+        verify(client).invoke(request.capture());
+        assertThat(request.getValue().functionName()).isEqualTo("fiap-email-prod:live");
+        assertThat(request.getValue().payload().asUtf8String()).contains("notification-123");
     }
 
     @Test
