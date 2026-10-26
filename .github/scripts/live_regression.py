@@ -41,7 +41,8 @@ def call(method, path, body=None, *, token="admin", expected=(200,), operation=N
         headers["Authorization"] = "Bearer " + authentication
     request = urllib.request.Request(base + path, method=method, headers=headers,
         data=json.dumps(body).encode() if body is not None else None)
-    time.sleep(0.18)
+    # The initial SES sandbox allows one message per second. Space mutations that emit OS notifications.
+    time.sleep(1.1 if method in {"POST", "PATCH", "PUT", "DELETE"} and path.startswith("/service-orders") else 0.18)
     try:
         with urllib.request.urlopen(request, timeout=45) as response:
             status, data = response.status, response.read()
