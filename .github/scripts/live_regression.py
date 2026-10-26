@@ -21,6 +21,9 @@ if environment not in {"develop", "homol", "prod"}:
     raise ValueError("Invalid environment")
 configuration = json.loads(os.environ["FIAP_RUNTIME_CONFIG"])[environment]
 base = configuration["api_url"].rstrip("/")
+notification_recipient = configuration.get("notification_test_email", "")
+if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", notification_recipient):
+    raise ValueError("Configure an authorized notification_test_email in FIAP_RUNTIME_CONFIG")
 if not re.fullmatch(r"https://[a-z0-9]+\.execute-api\.sa-east-1\.amazonaws\.com", base):
     raise ValueError("Only the project API Gateway endpoints are accepted")
 run = uuid.uuid4().hex
@@ -81,17 +84,19 @@ schema = call("GET", "/v3/api-docs", token=None)
 call("GET", "/service-orders", token=None, expected=(401,))
 call("POST", "/auth/register", {"email": f"staff-{run}@example.test", "password": secrets.token_urlsafe(24)}, expected=(201,))
 document = cpf()
-account = {"email": f"customer-{run}@example.test", "password": secrets.token_urlsafe(24),
+account = {"email": f"ci-{run}@example.test", "password": secrets.token_urlsafe(24),
     "name": f"CI {run}", "phone": "11999998888", "cnpjCpf": document}
 customer = call("POST", "/auth/register-account", account, token=None, expected=(201,))
 customer_id = customer["customerId"]
+call("PUT", f"/customers/alter/{customer_id}", {key: notification_recipient if key == "email" else account[key]
+    for key in ("name", "email", "phone", "cnpjCpf")}, operation="/customers/alter/{id}")
 customer_token = call("POST", "/auth/customer", {"cpf": document}, token=None)["accessToken"]
 call("POST", "/auth/register", {"email": f"blocked-{run}@example.test", "password": "never-created"},
     token=customer_token, expected=(403,))
 call("GET", "/customers", token=customer_token, expected=(403,))
 call("GET", "/service-orders/my-orders", token=customer_token)
 other_document = cpf()
-other = {"name": f"CI disposable {run}", "email": f"other-{run}@example.test", "phone": "11999998888", "cnpjCpf": other_document}
+other = {"name": f"CI disposable {run}", "email": notification_recipient, "phone": "11999998888", "cnpjCpf": other_document}
 other_id = call("POST", "/customers/register", other, expected=(201,))["customerId"]
 call("PUT", f"/customers/alter/{other_id}", other, operation="/customers/alter/{id}")
 call("GET", "/customers")
@@ -180,7 +185,7 @@ if missing:
 with tempfile.TemporaryDirectory() as directory:
     from pathlib import Path
     request, response = Path(directory) / "request.json", Path(directory) / "response.json"
-    request.write_text(json.dumps({"environment": environment, "require_apm": True, "require_business": True, "require_uptime": True}))
+    request.write_text(json.dumps({"environment": environment, "require_apm": True, "require_business": True, "require_uptime": True, "require_notifications": True, "correlation_id": f"regression-{run}"}))
     for attempt in range(12):
         metadata = json.loads(subprocess.run(["aws", "lambda", "invoke", "--function-name", "fiap-observability-probe",
             "--cli-binary-format", "raw-in-base64-out", "--payload", f"file://{request}", str(response), "--output", "json"],
