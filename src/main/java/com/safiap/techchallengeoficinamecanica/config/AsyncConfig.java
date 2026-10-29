@@ -16,12 +16,28 @@ public class AsyncConfig {
      * de negócio que já foi commitada.
      */
     @Bean("notificationExecutor")
-    public TaskExecutor notificationExecutor() {
+    public TaskExecutor notificationExecutor(@org.springframework.beans.factory.annotation.Value("${notifications.executor.concurrency:2}") int concurrency) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
+        executor.setCorePoolSize(concurrency);
+        executor.setMaxPoolSize(concurrency);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("notif-");
+        executor.setTaskDecorator(task -> {
+            var context = org.slf4j.MDC.getCopyOfContextMap();
+            return () -> {
+                var previous = org.slf4j.MDC.getCopyOfContextMap();
+                try {
+                    if (context == null) org.slf4j.MDC.clear();
+                    else org.slf4j.MDC.setContextMap(context);
+                    task.run();
+                } finally {
+                    if (previous == null) org.slf4j.MDC.clear();
+                    else org.slf4j.MDC.setContextMap(previous);
+                }
+            };
+        });
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(45);
         executor.initialize();
         return executor;
     }

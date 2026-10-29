@@ -43,6 +43,8 @@ class EndpointRegressionTest {
                             .contentType(MediaType.APPLICATION_JSON).content("{}"))
                             .andReturn();
                     int status = result.getResponse().getStatus();
+                    assertThat(status).as("%s %s must not return a server error", method, path)
+                            .isLessThan(500);
                     assertThat(status).as("%s %s must not reject its method", method, path)
                             .isNotEqualTo(405);
                     if (status == 404) {
