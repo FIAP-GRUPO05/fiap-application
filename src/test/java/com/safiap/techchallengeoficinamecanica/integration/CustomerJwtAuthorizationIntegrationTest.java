@@ -60,6 +60,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class CustomerJwtAuthorizationIntegrationTest {
 
+    @Test
+    void budgetEndpointsEnforceOwnershipWithRealRs256CustomerTokens() throws Exception {
+        var order = serviceOrderRepository.saveAndFlush(order(UUID.randomUUID()));
+        String foreign = token(SIGNING_KEYS, ISSUER, AUDIENCE, "CUSTOMER", UUID.randomUUID(), Instant.now().plusSeconds(300));
+        String base = "/service-orders/" + order.getId() + "/budget";
+        for (String suffix : List.of("", "/decision/view")) {
+            mockMvc.perform(get(base + suffix).header("Authorization", "Bearer " + foreign))
+                    .andExpect(status().isForbidden());
+        }
+        for (String suffix : List.of("/approve", "/reject")) {
+            mockMvc.perform(post(base + suffix).header("Authorization", "Bearer " + foreign))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
     private static final String AUDIENCE = "fiap-api";
     private static final String KEY_ID = "customer-jwt-test-key";
     private static final KeyPair SIGNING_KEYS = generateKeyPair();

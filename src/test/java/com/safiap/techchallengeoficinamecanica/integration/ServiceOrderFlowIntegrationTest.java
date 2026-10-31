@@ -125,7 +125,7 @@ class ServiceOrderFlowIntegrationTest {
 
         // O cliente precisa aprovar o orcamento antes: sem isso o /execute responde 409.
         // A aprovacao e um POST e devolve a pagina de confirmacao, nao JSON.
-        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/approve"))
+        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/approve").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
                 .andExpect(content().string(containsString("Orçamento aprovado")));
@@ -222,7 +222,7 @@ class ServiceOrderFlowIntegrationTest {
 
         // O cliente precisa aprovar o orcamento antes: sem isso o /execute responde 409.
         // A aprovacao e um POST e devolve a pagina de confirmacao, nao JSON.
-        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/approve"))
+        mockMvc.perform(post("/service-orders/" + serviceOrderId + "/budget/approve").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
                 .andExpect(content().string(containsString("Orçamento aprovado")));
