@@ -67,12 +67,8 @@ public class SecurityConfig {
                         // usados pelas probes do Kubernetes; sem isso elas tomam 401.
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers(HttpMethod.GET,
-                                "/service-orders/*/budget",
-                                "/service-orders/*/budget/decision").permitAll()
-                        .requestMatchers(HttpMethod.POST,
-                                "/service-orders/*/budget/approve",
-                                "/service-orders/*/budget/reject").permitAll()
+                        // Public email landing page contains only the CPF form; budget data requires JWT.
+                        .requestMatchers(HttpMethod.GET, "/service-orders/*/budget/decision").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
