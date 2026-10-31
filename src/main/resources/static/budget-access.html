@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acesso ao orçamento — Oficina Mecânica</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; padding: 24px; background: #f4f5f7; color: #1f2328; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .card { max-width: 640px; margin: 0 auto 16px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px #0002; overflow: hidden; }
+    .head { background: #0b5cad; color: #fff; padding: 24px; }
+    h1 { margin: 0; font-size: 22px; } .body { padding: 24px; } .msg { line-height: 1.5; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; }
+    input { box-sizing: border-box; width: 100%; font: inherit; padding: 12px; border: 1px solid #59636e; border-radius: 6px; margin-bottom: 16px; }
+    .btn, button { font: inherit; font-weight: 600; padding: 12px 20px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; }
+    .primary { background: #1b7f4b; color: white; } .secondary { background: white; color: #b3261e; border-color: #b3261e; }
+    button:disabled { opacity: .6; cursor: wait; } [hidden] { display: none !important; }
+    #message, #session-controls { max-width: 640px; margin: 16px auto; } #message { color: #8a251c; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; } dd { margin: 0; font-weight: 600; } dt { color: #59636e; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; } th, td { padding: 8px; text-align: left; border-bottom: 1px solid #e6e8eb; }
+    .num { text-align: right; } tfoot td { font-weight: 700; } .foot { padding: 16px 24px; background: #fafbfc; font-size: 13px; }
+    @media (max-width: 480px) { body { padding: 12px; } .body { padding: 16px; } dl { grid-template-columns: 1fr; } table { font-size: 12px; } th, td { padding: 4px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="login-card" class="card">
+      <div class="head"><h1>Identifique-se para consultar seu orçamento</h1></div>
+      <div class="body">
+        <p class="msg">Informe o CPF cadastrado na oficina. O orçamento será exibido somente após a identificação do cliente responsável.</p>
+        <form id="cpf-form" method="post">
+          <label for="cpf">CPF do cliente</label>
+          <input id="cpf" name="cpf" type="text" inputmode="numeric" autocomplete="off" maxlength="14" required aria-describedby="message">
+          <button id="login-button" class="primary" type="submit" disabled>Consultar meu orçamento</button>
+        </form>
+        <noscript>Ative o JavaScript para se identificar e consultar o orçamento.</noscript>
+      </div>
+    </section>
+    <p id="message" role="status" aria-live="polite"></p>
+    <div id="budget-content" hidden></div>
+    <div id="session-controls" hidden><button id="logout-button" class="secondary" type="button">Encerrar acesso</button></div>
+  </main>
+  <script nonce="__SCRIPT_NONCE__">__ACCESS_SCRIPT__</script>
+</body>
+</html>
