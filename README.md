@@ -45,6 +45,10 @@ $env:AWS_SECRET_ACCESS_KEY='local'
 
 Esse teste usa apenas o runtime Docker em `127.0.0.1:19000` e verifica os e-mails em `127.0.0.1:18025`. Na AWS, `MAIL_TIPE=LAMBDA` usa o alias `fiap-email-<ambiente>:live` com credenciais temporárias do pod. A regressão HTTPS usa `notification_test_email` autorizado, configurado em `FIAP_RUNTIME_CONFIG`.
 
+O link de orçamento do e-mail abre somente a identificação por CPF. Consultar detalhes, aprovar ou recusar exige JWT e validação de que a OS pertence ao cliente; `USER`/`ADMIN` mantêm acesso operacional. O token fica apenas em memória no navegador, sem aparecer na URL ou no armazenamento local.
+
+O teste opcional do navegador usa Node.js 22+ e Chrome/Edge, backend real com H2 e emissor CPF mockado: `$env:FIAP_BROWSER_TEST='true'; ./gradlew.bat test --tests '*BudgetAccessBrowserIntegrationTest' --no-daemon`. O teste padrão de autorização não precisa de navegador ou AWS.
+
 Para encerrar o ambiente da aplicação: `docker compose down`. No Linux/macOS, use `cp` e `./gradlew` no lugar de `Copy-Item` e `./gradlew.bat`.
 
 ## Deploy e ambientes
@@ -57,7 +61,7 @@ Na CI, a aplicação executa build, testes, cobertura mínima de 90%, verificaç
 
 ## API e URLs dos ambientes
 
-URLs verificadas em 28/10/2026, com saúde `UP` e regressivo das 53 operações OpenAPI aprovado em cada ambiente:
+URLs verificadas em 28/10/2026, com saúde `UP`. O regressivo HTTPS verifica todas as operações do OpenAPI publicado em cada ambiente:
 
 | Ambiente | API | Swagger |
 | --- | --- | --- |

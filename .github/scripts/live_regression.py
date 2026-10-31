@@ -99,6 +99,7 @@ call("GET", "/service-orders/my-orders", token=customer_token)
 other_document = cpf()
 other = {"name": f"CI disposable {run}", "email": notification_recipient, "phone": "11999998888", "cnpjCpf": other_document}
 other_id = call("POST", "/customers/register", other, expected=(201,))["customerId"]
+other_token = call("POST", "/auth/customer", {"cpf": other_document}, token=None)["accessToken"]
 call("PUT", f"/customers/alter/{other_id}", other, operation="/customers/alter/{id}")
 call("GET", "/customers")
 call("GET", f"/customers/{customer_id}", operation="/customers/{id}")
@@ -148,10 +149,18 @@ step(identifier, "/budget/parts", "POST", {"itemId": part_id, "description": "CI
 step(identifier, "/budget/services", "POST", {"itemId": service_id, "description": "CI service", "quantity": 1}, expected=(201,))
 step(identifier, "/budget/items", "POST", {"items": [{"type": "PART", "itemId": part_id, "description": "CI part", "quantity": 1}]}, expected=(201,))
 step(identifier, "/finalize-diagnosis", body={"diagnosis": "Synthetic functional regression"})
-budget = step(identifier, "/budget", "GET", token=None)
+landing = step(identifier, "/budget/decision", "GET", token=None)
+assert "Identifique-se" in landing and "CI service" not in landing
+for suffix, method in (("/budget", "GET"), ("/budget/decision/view", "GET"),
+                       ("/budget/approve", "POST"), ("/budget/reject", "POST")):
+    step(identifier, suffix, method, token=None, expected=(401,))
+    step(identifier, suffix, method, token=other_token, expected=(403,))
+step(identifier, "/budget", "GET", token="invalid.jwt", expected=(401,))
+budget = step(identifier, "/budget", "GET", token=customer_token)
 assert float(budget["totalAmount"]) == 40
-step(identifier, "/budget/decision", "GET", token=None)
-step(identifier, "/budget/approve", "POST", token=None)
+assert budget["status"] == "FINALIZED"
+step(identifier, "/budget/decision/view", "GET", token=customer_token)
+step(identifier, "/budget/approve", "POST", token=customer_token)
 step(identifier, "/execute")
 service_item = next(item["budgetItemId"] for item in budget["items"] if item["type"] == "SERVICE")
 call("PATCH", f"/service-orders/{identifier}/budget/items/{service_item}/complete",
@@ -167,7 +176,7 @@ for via_email in (False, True):
         step(rejected, "/budget/finalize")
     step(rejected, "/finalize-diagnosis", body={"diagnosis": "Synthetic rejection flow"})
     if via_email:
-        step(rejected, "/budget/reject", "POST", token=None)
+        step(rejected, "/budget/reject", "POST", token=customer_token)
     else:
         step(rejected, "/reject-budget", token=customer_token)
 call("DELETE", f"/vehicles/{vehicle_id}", expected=(409,), operation="/vehicles/{id}")
