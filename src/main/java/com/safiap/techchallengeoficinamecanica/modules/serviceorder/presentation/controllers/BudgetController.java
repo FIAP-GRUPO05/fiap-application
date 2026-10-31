@@ -9,9 +9,12 @@ import com.safiap.techchallengeoficinamecanica.modules.serviceorder.presentation
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.presentation.dto.AddPartDTO;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.presentation.dto.AddServiceDTO;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.presentation.dto.BudgetItemMapper;
+import com.safiap.techchallengeoficinamecanica.modules.serviceorder.presentation.security.BudgetAccess;
 import jakarta.validation.Valid;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +24,8 @@ import java.util.UUID;
 @RequestMapping("/service-orders/{serviceOrderId}/budget")
 @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
 public class BudgetController {
+
+    private final BudgetAccess budgetAccess;
 
     private final AddItemsToBudgetUseCase addItemsToBudgetUseCase;
     private final AddPartToBudgetUseCase addPartToBudgetUseCase;
@@ -34,7 +39,9 @@ public class BudgetController {
                             AddServiceToBudgetUseCase addServiceToBudgetUseCase,
                             GetBudgetUseCase getBudgetUseCase,
                             FinalizeBudgetUseCase finalizeBudgetUseCase,
-                            CompleteServiceItemUseCase completeServiceItemUseCase) {
+                            CompleteServiceItemUseCase completeServiceItemUseCase,
+                            BudgetAccess budgetAccess) {
+        this.budgetAccess = budgetAccess;
         this.addItemsToBudgetUseCase = addItemsToBudgetUseCase;
         this.addPartToBudgetUseCase = addPartToBudgetUseCase;
         this.addServiceToBudgetUseCase = addServiceToBudgetUseCase;
@@ -43,10 +50,11 @@ public class BudgetController {
         this.completeServiceItemUseCase = completeServiceItemUseCase;
     }
 
-    @PreAuthorize("permitAll()")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'CUSTOMER')")
     @GetMapping
-    public ResponseEntity<BudgetResponse> getBudget(@PathVariable UUID serviceOrderId) {
-        return ResponseEntity.ok(getBudgetUseCase.execute(serviceOrderId));
+    public ResponseEntity<BudgetResponse> getBudget(@PathVariable UUID serviceOrderId, Authentication authentication) {
+        budgetAccess.require(serviceOrderId, authentication);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(getBudgetUseCase.execute(serviceOrderId));
     }
 
     @PostMapping("/items")
