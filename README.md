@@ -23,7 +23,7 @@ Este repositório contém apenas a API Java (código, Dockerfile, testes e o reg
 
 O API Gateway encaminha `POST /auth/login`, `POST /auth/customer`, `GET /.well-known/openid-configuration` e `GET /.well-known/jwks.json` para a Lambda de autenticação; as demais rotas seguem pelo VPC Link até o ALB interno e os pods da API. O HPA escala por CPU (70%): 1 a 2 réplicas em develop/homol e 2 a 4 em prod.
 
-## Executar e testar localmente
+## Executar e testar localmente 
 
 Na raiz do repositório, em PowerShell:
 
