@@ -9,7 +9,7 @@ API da oficina mecânica: clientes, veículos, estoque, serviços, orçamentos e
 Java 21, Spring Boot 3.5, Gradle Wrapper, PostgreSQL, Flyway, Docker, Kubernetes e New Relic. Para executar localmente, use Docker com Compose v2; para testes fora do container, instale JDK 21. Git e GitHub CLI autenticado permitem contribuir e acompanhar a publicação.
 
 ## Arquitetura deste componente
-
+ 
 ![Arquitetura do fiap-application](docs/arquitetura.png)
 
 Fonte editável: [`docs/arquitetura.mmd`](docs/arquitetura.mmd).
