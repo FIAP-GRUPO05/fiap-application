@@ -99,10 +99,13 @@ estruturais de `infra/platform` (K8s) e `infra/managed` (banco/Lambda) recebem
 `terraform plan` e `apply` automaticamente apenas depois do merge na branch prod
 do respectivo repositorio. Suas funcoes OIDC aceitam exclusivamente essa branch.
 Um merge em develop ou release publica codigo/configuracao do seu ambiente e nao
-aplica alteracoes na infraestrutura compartilhada que tambem atende producao.
+aplica alteracoes de `infra/platform` ou `infra/managed`, que tambem atendem producao.
+A exceção é o registro ECR da aplicação: o job `publish` executa `terraform plan` e
+`terraform apply` em `infra/registry` em todo publish, ou seja, nos merges em develop,
+release/* e prod (desde que a infraestrutura esteja active).
 O bootstrap de IAM/OIDC permanece uma operacao administrativa separada.
 
-O registro ECR da aplicacao e atualizado por Terraform no job de publicacao.
+O registro ECR da aplicacao e atualizado por Terraform no job de publicacao de cada ambiente.
 Dashboards e alertas New Relic sao atualizados pelo workflow K8s. Estados no S3
 usam criptografia, versionamento e bloqueio `.tflock`. Planos, estados locais e
 credenciais nao devem ser adicionados ao Git.
@@ -140,7 +143,7 @@ ausencia de sinal por 15 minutos. O CI confirma o recebimento dessas amostras.
 Os incidentes ficam em Alerts > Issues; a entrega por e-mail/Slack depende de
 definir o destino do time. O monitor verifica disponibilidade, sem executar uma
 jornada autenticada de negocio; essa jornada pertence ao regressivo do deploy.
-E-mail permanece `MAIL_TIPE=NONE`; os testes nao enviam mensagens reais.
+Nos ambientes AWS a API usa `MAIL_TIPE=LAMBDA` (`fiap-email-<ambiente>:live`); a regressao do deploy envia somente para o `notification_test_email` autorizado em `FIAP_RUNTIME_CONFIG`.
 Registros sinteticos de ordens de servico usados na regressao ficam identificados
 pelo UUID da execucao e preservam o historico, inclusive em prod.
 
