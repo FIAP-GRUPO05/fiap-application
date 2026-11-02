@@ -1,0 +1,27 @@
+flowchart LR
+    Cliente([Cliente / Postman])
+
+    subgraph LAMBDA_REPO["fiap-lambda"]
+        GW["API Gateway HTTP API<br/>JWT Authorizer"]
+        Auth["Lambda fiap-auth-{env}<br/>POST /auth/login, POST /auth/customer<br/>/.well-known/jwks.json (RS256)"]
+        Link["VPC Link"]
+        Email["Lambda fiap-email-{env}:live"]
+    end
+
+    subgraph K8S_REPO["EKS - manifests gerados pelo fiap-k8s"]
+        ALB["ALB interno<br/>(Ingress api-ingress)"]
+        Pods["Pods da API Java<br/>(Deployment + HPA api-hpa)"]
+    end
+
+    RDS[("RDS PostgreSQL<br/>Flyway")]
+    SES["Amazon SES"]
+    NR["New Relic<br/>APM, logs JSON e eventos"]
+
+    Cliente -->|HTTPS| GW
+    GW -->|rotas de login e JWKS| Auth
+    GW -->|demais rotas| Link --> ALB --> Pods
+    Pods -->|"GET /.well-known/jwks.json<br/>valida tokens RS256"| GW
+    Pods --> RDS
+    Auth --> RDS
+    Pods -->|Invoke após commit| Email --> SES
+    Pods -.->|agente APM + stdout JSON| NR

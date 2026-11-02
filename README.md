@@ -10,15 +10,18 @@ Java 21, Spring Boot 3.5, Gradle Wrapper, PostgreSQL, Flyway, Docker, Kubernetes
 
 ## Arquitetura deste componente
 
-```mermaid
-flowchart LR
-    Gateway[API Gateway / JWT] --> API[API Java no EKS]
-    API --> RDS[(PostgreSQL RDS / Flyway)]
-    API --> Evento[Evento de status apos commit]
-    Evento --> Lambda[Lambda de email do ambiente]
-    Lambda --> SES[Amazon SES]
-    API --> NR[New Relic: logs, traces e eventos]
-```
+![Arquitetura do fiap-application](docs/arquitetura.png)
+
+Fonte editável: [`docs/arquitetura.mmd`](docs/arquitetura.mmd).
+
+Este repositório contém apenas a API Java (código, Dockerfile, testes e o registro ECR em `infra/registry`). As demais peças do fluxo ficam em outros repositórios:
+
+| Peça | Repositório |
+| --- | --- |
+| API Gateway HTTP API, JWT Authorizer, VPC Link, Lambda de autenticação (`fiap-auth-<ambiente>`) e Lambda de e-mail (`fiap-email-<ambiente>`) | [fiap-lambda](https://github.com/FIAP-GRUPO05/fiap-lambda) |
+| Deployment, Service, Ingress (ALB interno) e HPA da API no EKS, gerados por `infra/platform/scripts/deploy_application.py` e aplicados via CodeBuild | [fiap-k8s](https://github.com/FIAP-GRUPO05/fiap-k8s) |
+
+O API Gateway encaminha `POST /auth/login`, `POST /auth/customer`, `GET /.well-known/openid-configuration` e `GET /.well-known/jwks.json` para a Lambda de autenticação; as demais rotas seguem pelo VPC Link até o ALB interno e os pods da API. O HPA escala por CPU (70%): 1 a 2 réplicas em develop/homol e 2 a 4 em prod.
 
 ## Executar e testar localmente
 
@@ -32,7 +35,7 @@ docker compose ps
 ./gradlew.bat clean build jacocoTestCoverageVerification --no-daemon
 ```
 
-API: http://localhost:8080 · [Swagger local](http://localhost:8080/swagger-ui/index.html) · [OpenAPI local](http://localhost:8080/v3/api-docs) · [Postman](CURL/oficina-mecanica.json) · MailHog: http://localhost:8025.
+API: http://localhost:8080 · [Swagger local](http://localhost:8080/swagger-ui/index.html) · [OpenAPI local](http://localhost:8080/v3/api-docs) · [Collection Postman](CURL/oficina-mecanica.json) · MailHog: http://localhost:8025.
 
 O modo local padrão é SMTP para MailHog, sem enviar mensagens externas. Para o teste integrado com Lambda, inicie `compose.notifications.yaml` no `fiap-lambda` e execute:
 
@@ -49,11 +52,22 @@ O link de orçamento do e-mail abre somente a identificação por CPF. Consultar
 
 O teste opcional do navegador usa Node.js 22+ e Chrome/Edge, backend real com H2 e emissor CPF mockado: `$env:FIAP_BROWSER_TEST='true'; ./gradlew.bat test --tests '*BudgetAccessBrowserIntegrationTest' --no-daemon`. O teste padrão de autorização não precisa de navegador ou AWS.
 
+A [Collection Postman](CURL/oficina-mecanica.json) (formato Postman Collection v2.1) cobre os módulos de autenticação, cadastros, estoque e ordens de serviço. Para usar: no Postman, **Import** → selecione `CURL/oficina-mecanica.json`; ajuste a variável de coleção `baseUrl` (padrão `http://localhost:8080`, ou a URL da API do ambiente na tabela abaixo) e execute `Auth > Login`, que grava o `accessToken` na variável `token` usada pelas demais requisições.
+
 Para encerrar o ambiente da aplicação: `docker compose down`. No Linux/macOS, use `cp` e `./gradlew` no lugar de `Copy-Item` e `./gradlew.bat`.
 
 ## Deploy e ambientes
 
-O fluxo é `feature/* → develop → release/vX.Y.Z → prod → main`. Após o push da feature e o sucesso da CI, o PR é aberto automaticamente; os merges são manuais. Os próximos PRs são gerados após a promoção aprovada. `develop`, `release/*` e `prod` publicam no ambiente correspondente quando a infraestrutura está `active`; `prod → main` apenas consolida a versão.
+O fluxo é `feature/* → develop → release/vX.Y.Z → prod → main`. O ambiente de destino de cada publicação é definido no job `publish` de `.github/workflows/pipeline.yml`:
+
+| Branch | Ambiente | Namespace no EKS |
+| --- | --- | --- |
+| `develop` | Develop | `develop` |
+| `release/vX.Y.Z` | Homologação | `homol` |
+| `prod` | Produção | `prod` |
+| `main` | Nenhum: apenas consolida a versão (PR `prod → main`, sem build nem deploy) | — |
+
+Após o push da feature e o sucesso da CI, o PR é aberto automaticamente; os merges são manuais. Os próximos PRs são gerados após a promoção aprovada. `develop`, `release/*` e `prod` publicam no ambiente correspondente quando a infraestrutura está `active`; `prod → main` apenas consolida a versão.
 
 Em `destroyed`/`destroying`, deploys e promoções ficam bloqueados. Em `maintenance`, a CI permite validar e promover código, mantendo os deploys bloqueados. O bootstrap administrativo usa AWS CLI; a operação diária do CI usa OIDC e não exige credenciais AWS de cada integrante.
 
@@ -61,21 +75,27 @@ Na CI, a aplicação executa build, testes, cobertura mínima de 90%, verificaç
 
 ## API e URLs dos ambientes
 
-URLs verificadas em 28/10/2026, com saúde `UP`. O regressivo HTTPS verifica todas as operações do OpenAPI publicado em cada ambiente:
+Cada ambiente (develop, homologação e produção) tem seu próprio API Gateway. As URLs não ficam fixadas aqui porque mudam sempre que a infraestrutura é recriada. A configuração atual, usada pela CI, fica na variável `FIAP_RUNTIME_CONFIG` (campo `api_url` de cada ambiente):
 
-| Ambiente | API | Swagger |
-| --- | --- | --- |
-| Develop | [API](https://ku4upcna7k.execute-api.sa-east-1.amazonaws.com) | [Swagger](https://ku4upcna7k.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html) |
-| Homologação | [API](https://ryzzw5lm77.execute-api.sa-east-1.amazonaws.com) | [Swagger](https://ryzzw5lm77.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html) |
-| Produção | [API](https://khha99ce86.execute-api.sa-east-1.amazonaws.com) | [Swagger](https://khha99ce86.execute-api.sa-east-1.amazonaws.com/swagger-ui/index.html) |
-
-Uma reconstrução pode gerar novos endereços. A configuração usada pela CI é consultada com:
-
-```powershell
+```bash
 gh api repos/FIAP-GRUPO05/fiap-lambda/actions/variables/FIAP_RUNTIME_CONFIG --jq .value
 ```
 
-Em cada `api_url`, o Swagger fica em `/swagger-ui/index.html`, o OpenAPI em `/v3/api-docs` e a saúde em `/actuator/health`. A autenticação CPF usa `POST /auth/customer`; operações protegidas exigem `Authorization: Bearer <JWT>`.
+Em cada `api_url`, o Swagger fica em `/swagger-ui/index.html`, o OpenAPI em `/v3/api-docs` e a saúde em `/actuator/health`. Operações protegidas exigem `Authorization: Bearer <JWT>`.
+
+### Autenticação: nuvem x execução local
+
+- **Na nuvem**, `POST /auth/customer` (CPF) e `POST /auth/login` (e-mail e senha) são atendidas pela Lambda de autenticação do [fiap-lambda](https://github.com/FIAP-GRUPO05/fiap-lambda), não pela API Java. A Lambda emite tokens RS256; o JWT Authorizer do API Gateway valida o token e a API Java também o valida, pois o deploy define `JWT_ISSUER` e o Spring busca as chaves em `<JWT_ISSUER>/.well-known/jwks.json` (`SecurityConfig.jwtDecoder`), conferindo issuer e audience.
+- **Localmente** (sem `JWT_ISSUER`), `POST /auth/login` da API Java emite um token HS256 assinado com `JWT_SECRET`, com issuer `"self"` (`JwtTokenService`). Esse token vale apenas na execução local e não é aceito nos ambientes da AWS.
+- `POST /auth/register-account` é sempre atendida pela API Java (rota pública também na nuvem): cria o usuário e o cliente e devolve os dados da conta, sem token. O token é obtido em seguida pelo login.
+
+## Observabilidade
+
+Nos ambientes da AWS, o deploy ativa o perfil Spring `json-logs` e define `NEW_RELIC_APP_NAME=fiap-api-<ambiente>`; o agente New Relic Java envia APM e traces.
+
+- **Logs JSON**: com o perfil `json-logs`, o `logback-spring.xml` usa `LogstashEncoder` e grava uma linha JSON por log no stdout, com o campo `service: fiap-api`, o MDC e os argumentos estruturados. O New Relic coleta esses logs do cluster. Sem o perfil (execução local e testes), o console padrão do Spring Boot é mantido.
+- **Correlação**: o `CorrelationIdFilter` reaproveita o header `X-Correlation-Id` recebido (até 64 caracteres `[A-Za-z0-9._-]`) ou gera um UUID, devolve o mesmo header na resposta e coloca `correlationId`, `trace.id` e `span.id` no MDC. Assim os logs da requisição ficam ligados ao trace distribuído no New Relic.
+- **Evento customizado `ServiceOrderStatusChanged`**: gravado após o commit de cada mudança de status da ordem de serviço (`ServiceOrderStatusMetricsListener`), com os atributos `serviceOrderId`, `previousStatus`, `newStatus`, `timeInPreviousStatusSeconds`, `correlationId` e `appName` (atributos nulos são omitidos). Os dashboards provisionados pelo [fiap-k8s](https://github.com/FIAP-GRUPO05/fiap-k8s) usam esse evento nos painéis "Volume diário de ordens de serviço abertas" e "Tempo médio de execução por status (min)".
 
 ## Membros da equipe
 
