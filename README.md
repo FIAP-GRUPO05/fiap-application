@@ -16,7 +16,7 @@ Fonte editável: [`docs/arquitetura.mmd`](docs/arquitetura.mmd).
 
 Este repositório contém apenas a API Java (código, Dockerfile, testes e o registro ECR em `infra/registry`). As demais peças do fluxo ficam em outros repositórios:
 
-| Peça | Repositório |
+| Peça | Repositório | 
 | --- | --- |
 | API Gateway HTTP API, JWT Authorizer, VPC Link, Lambda de autenticação (`fiap-auth-<ambiente>`) e Lambda de e-mail (`fiap-email-<ambiente>`) | [fiap-lambda](https://github.com/FIAP-GRUPO05/fiap-lambda) |
 | Deployment, Service, Ingress (ALB interno) e HPA da API no EKS, gerados por `infra/platform/scripts/deploy_application.py` e aplicados via CodeBuild | [fiap-k8s](https://github.com/FIAP-GRUPO05/fiap-k8s) |
