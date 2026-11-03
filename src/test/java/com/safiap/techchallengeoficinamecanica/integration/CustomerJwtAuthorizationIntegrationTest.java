@@ -11,6 +11,7 @@ import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.domain.value_objects.ServiceOrderStatus;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.infrastructure.persistence.entities.JPAServiceOrderEntity;
 import com.safiap.techchallengeoficinamecanica.modules.serviceorder.infrastructure.persistence.repositories.JPAServiceOrderRepository;
+import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.CustomerStatus;
 import com.safiap.techchallengeoficinamecanica.modules.register.infrastructure.persistence.entities.JPACustomerEntity;
 import com.safiap.techchallengeoficinamecanica.modules.register.infrastructure.persistence.repositories.JPACustomerRepository;
 import com.sun.net.httpserver.HttpServer;
@@ -51,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -172,6 +174,35 @@ class CustomerJwtAuthorizationIntegrationTest {
                 .header("Authorization", "Bearer " + token(SIGNING_KEYS, ISSUER, AUDIENCE, "ADMIN",
                         UUID.randomUUID(), Instant.now().plusSeconds(300))))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    @Transactional
+    @DisplayName("staff can deactivate and reactivate a customer; customers cannot change status")
+    void staffTogglesCustomerStatusAndCustomersAreForbidden() throws Exception {
+        var saved = customerRepository.saveAndFlush(customer("status-" + UUID.randomUUID(), "39053344705"));
+        String base = "/customers/" + saved.getId();
+        String staff = "Bearer " + token(SIGNING_KEYS, ISSUER, AUDIENCE, "USER", UUID.randomUUID(), Instant.now().plusSeconds(300));
+        String owner = "Bearer " + token(SIGNING_KEYS, ISSUER, AUDIENCE, "CUSTOMER", saved.getId(), Instant.now().plusSeconds(300));
+
+        mockMvc.perform(patch(base + "/deactivate").header("Authorization", owner))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch(base + "/deactivate"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch(base + "/deactivate").header("Authorization", staff))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(saved.getId().toString()))
+                .andExpect(jsonPath("$.status").value("INACTIVE"));
+        assertThat(customerRepository.findById(saved.getId()).orElseThrow().getStatus()).isEqualTo(CustomerStatus.INACTIVE);
+
+        mockMvc.perform(patch(base + "/activate").header("Authorization", staff))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+        assertThat(customerRepository.findById(saved.getId()).orElseThrow().getStatus()).isEqualTo(CustomerStatus.ACTIVE);
+
+        mockMvc.perform(patch("/customers/" + UUID.randomUUID() + "/activate").header("Authorization", staff))
+                .andExpect(status().isNotFound());
     }
 
     @AfterAll
