@@ -1,6 +1,8 @@
 package com.safiap.techchallengeoficinamecanica.modules.register.presentation.controllers;
 
 
+import com.safiap.techchallengeoficinamecanica.modules.register.application.responses.customer.CustomerStatusResponse;
+import com.safiap.techchallengeoficinamecanica.modules.register.domain.value_objects.CustomerStatus;
 import com.safiap.techchallengeoficinamecanica.modules.register.application.commands.customer.RegisterCustomerCommand;
 import com.safiap.techchallengeoficinamecanica.modules.register.application.commands.customer.AlterCustomerCommand;
 import com.safiap.techchallengeoficinamecanica.modules.register.application.responses.customer.GetCustomerResponse;
@@ -29,19 +31,22 @@ public class CustomerController {
     private final GetCustomerByIdUseCase  getCustomerByIdUseCase;
     private final GetCustomerByCnpjCpfUseCase getCustomerByCnpjCpfUseCase;
     private final DeleteCustomerUseCase deleteCustomerUseCase;
+    private final ChangeCustomerStatusUseCase changeCustomerStatusUseCase;
 
     public CustomerController(RegisterCustomerUseCase registerCustomerUseCase,
                               AlterCustomerUseCase alterCustomerUseCase,
                               GetAllCustomersUseCase getAllCustomersUseCase,
                               GetCustomerByIdUseCase getCustomerByIdUseCase,
                               GetCustomerByCnpjCpfUseCase getCustomerByCnpjCpfUseCase,
-                              DeleteCustomerUseCase deleteCustomerUseCase) {
+                              DeleteCustomerUseCase deleteCustomerUseCase,
+                              ChangeCustomerStatusUseCase changeCustomerStatusUseCase) {
         this.registerCustomerUseCase = registerCustomerUseCase;
         this.alterCustomerUseCase = alterCustomerUseCase;
         this.getAllCustomersUseCase = getAllCustomersUseCase;
         this.getCustomerByIdUseCase = getCustomerByIdUseCase;
         this.getCustomerByCnpjCpfUseCase = getCustomerByCnpjCpfUseCase;
         this.deleteCustomerUseCase = deleteCustomerUseCase;
+        this.changeCustomerStatusUseCase = changeCustomerStatusUseCase;
     }
 
     @PostMapping("/register")
@@ -93,6 +98,16 @@ public class CustomerController {
             @PathVariable String cnpjCpf
     ) {
         return ResponseEntity.status(HttpStatus.OK).body(getCustomerByCnpjCpfUseCase.execute(cnpjCpf));
+    }
+
+    @PatchMapping("/{id}/activate")
+    public ResponseEntity<CustomerStatusResponse> activateCustomer(@PathVariable UUID id) {
+        return ResponseEntity.ok(changeCustomerStatusUseCase.execute(id, CustomerStatus.ACTIVE));
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    public ResponseEntity<CustomerStatusResponse> deactivateCustomer(@PathVariable UUID id) {
+        return ResponseEntity.ok(changeCustomerStatusUseCase.execute(id, CustomerStatus.INACTIVE));
     }
 
     @DeleteMapping("/{id}")

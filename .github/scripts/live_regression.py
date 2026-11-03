@@ -183,6 +183,11 @@ call("DELETE", f"/vehicles/{vehicle_id}", expected=(409,), operation="/vehicles/
 vehicle["carLicensePlate"] = "CD" + plate[2:]
 disposable_vehicle = call("POST", "/vehicles/register", vehicle, expected=(201,))["vehicleId"]
 call("DELETE", f"/vehicles/{disposable_vehicle}", expected=(204,), operation="/vehicles/{id}")
+call("PATCH", f"/customers/{other_id}/deactivate", token=other_token, expected=(403,), operation="/customers/{id}/deactivate")
+call("PATCH", f"/customers/{other_id}/deactivate", operation="/customers/{id}/deactivate")
+call("POST", "/auth/customer", {"cpf": other_document}, token=None, expected=(403,))
+call("PATCH", f"/customers/{other_id}/activate", operation="/customers/{id}/activate")
+call("POST", "/auth/customer", {"cpf": other_document}, token=None)
 call("DELETE", f"/customers/{other_id}", expected=(204,), operation="/customers/{id}")
 call("POST", "/auth/customer", {"cpf": other_document}, token=None, expected=(401,))
 for entity, entity_id in (("part", part_id), ("service", service_id)):
